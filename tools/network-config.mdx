@@ -1,0 +1,237 @@
+---
+title: "Network configuration tools reference"
+description: "Reference for UniFi MCP tools that create, update, and delete networks and VLANs, including DHCP configuration and subnet management."
+---
+
+The network configuration tools give you programmatic control over your UniFi site's layer-2 and layer-3 network topology. You can create new VLANs with full DHCP configuration, modify existing network settings without recreating them, and permanently remove networks you no longer need. All three write operations require `confirm=True` and support a `dry_run=True` mode so you can validate your configuration before applying it.
+
+<Warning>
+  All write operations on this page require `confirm=True`. Use `dry_run=True` to preview the exact payload that will be sent to the controller before committing. Deleting a network is irreversible — clients and devices on that segment will lose connectivity immediately.
+</Warning>
+
+## Tools
+
+### `create_network`
+
+Creates a new network (VLAN) in the specified site. You must supply a VLAN ID and subnet in CIDR notation. DHCP is enabled by default and additional options let you configure the DHCP range, DNS servers, and domain name.
+
+<ParamField body="site_id" type="string" required>
+  The site identifier where the network will be created.
+</ParamField>
+
+<ParamField body="name" type="string" required>
+  Human-readable name for the network (e.g. `"IoT Devices"`).
+</ParamField>
+
+<ParamField body="vlan_id" type="integer" required>
+  VLAN tag between 1 and 4094.
+</ParamField>
+
+<ParamField body="subnet" type="string" required>
+  Network address in CIDR notation (e.g. `"10.10.20.0/24"`).
+</ParamField>
+
+<ParamField body="purpose" type="string">
+  Network purpose. Accepted values: `corporate`, `guest`, `vlan-only`, `wan`. Defaults to `corporate`.
+</ParamField>
+
+<ParamField body="dhcp_enabled" type="boolean">
+  Enable the built-in DHCP server for this network. Defaults to `true`.
+</ParamField>
+
+<ParamField body="dhcp_start" type="string">
+  First IP address in the DHCP lease range (e.g. `"10.10.20.100"`).
+</ParamField>
+
+<ParamField body="dhcp_stop" type="string">
+  Last IP address in the DHCP lease range (e.g. `"10.10.20.254"`).
+</ParamField>
+
+<ParamField body="dhcp_dns_1" type="string">
+  Primary DNS server IP address.
+</ParamField>
+
+<ParamField body="dhcp_dns_2" type="string">
+  Secondary DNS server IP address.
+</ParamField>
+
+<ParamField body="dhcp_dns_3" type="string">
+  Tertiary DNS server IP address.
+</ParamField>
+
+<ParamField body="dhcp_dns_4" type="string">
+  Quaternary DNS server IP address.
+</ParamField>
+
+<ParamField body="domain_name" type="string">
+  Domain name distributed to DHCP clients (e.g. `"iot.local"`).
+</ParamField>
+
+<ParamField body="confirm" type="boolean" required>
+  Must be `true` to create the network.
+</ParamField>
+
+<ParamField body="dry_run" type="boolean">
+  When `true`, validates all parameters and returns the payload that would be sent to the controller without creating anything.
+</ParamField>
+
+**Example: creating a VLAN for IoT devices**
+
+<CodeGroup>
+
+```python dry run
+result = await mcp.call_tool("create_network", {
+    "site_id": "default",
+    "name": "IoT Devices",
+    "vlan_id": 20,
+    "subnet": "10.10.20.0/24",
+    "purpose": "corporate",
+    "dhcp_enabled": True,
+    "dhcp_start": "10.10.20.100",
+    "dhcp_stop": "10.10.20.254",
+    "dhcp_dns_1": "8.8.8.8",
+    "dhcp_dns_2": "8.8.4.4",
+    "domain_name": "iot.local",
+    "dry_run": True,
+    "confirm": True,
+})
+# {"dry_run": true, "would_create": {...}}
+```
+
+```python execute
+result = await mcp.call_tool("create_network", {
+    "site_id": "default",
+    "name": "IoT Devices",
+    "vlan_id": 20,
+    "subnet": "10.10.20.0/24",
+    "purpose": "corporate",
+    "dhcp_enabled": True,
+    "dhcp_start": "10.10.20.100",
+    "dhcp_stop": "10.10.20.254",
+    "dhcp_dns_1": "8.8.8.8",
+    "dhcp_dns_2": "8.8.4.4",
+    "domain_name": "iot.local",
+    "confirm": True,
+})
+```
+
+</CodeGroup>
+
+<Tip>
+  To create a network for VLAN tagging only with no IP assignment (e.g. for a trunk or passthrough segment), set `purpose` to `"vlan-only"` and `dhcp_enabled` to `false`.
+</Tip>
+
+---
+
+### `update_network`
+
+Modifies an existing network using a fetch-then-merge strategy: the tool fetches the current configuration, applies only the fields you supply, then writes the result back. Fields you omit are left unchanged.
+
+<ParamField body="site_id" type="string" required>
+  The site identifier where the network lives.
+</ParamField>
+
+<ParamField body="network_id" type="string" required>
+  The internal ID of the network to update. Use `get_network_details` or `list_vlans` to find this value.
+</ParamField>
+
+<ParamField body="name" type="string">
+  New human-readable name for the network.
+</ParamField>
+
+<ParamField body="vlan_id" type="integer">
+  New VLAN tag (1–4094). Changing a VLAN ID re-tags all traffic on that segment.
+</ParamField>
+
+<ParamField body="subnet" type="string">
+  New subnet in CIDR notation.
+</ParamField>
+
+<ParamField body="purpose" type="string">
+  New network purpose: `corporate`, `guest`, `vlan-only`, or `wan`.
+</ParamField>
+
+<ParamField body="dhcp_enabled" type="boolean">
+  Enable or disable the DHCP server.
+</ParamField>
+
+<ParamField body="dhcp_start" type="string">
+  New DHCP range start IP.
+</ParamField>
+
+<ParamField body="dhcp_stop" type="string">
+  New DHCP range stop IP.
+</ParamField>
+
+<ParamField body="dhcp_dns_1" type="string">
+  New primary DNS server.
+</ParamField>
+
+<ParamField body="dhcp_dns_2" type="string">
+  New secondary DNS server.
+</ParamField>
+
+<ParamField body="dhcp_dns_3" type="string">
+  New tertiary DNS server.
+</ParamField>
+
+<ParamField body="dhcp_dns_4" type="string">
+  New quaternary DNS server.
+</ParamField>
+
+<ParamField body="domain_name" type="string">
+  New domain name for DHCP clients.
+</ParamField>
+
+<ParamField body="confirm" type="boolean" required>
+  Must be `true` to apply changes.
+</ParamField>
+
+<ParamField body="dry_run" type="boolean">
+  When `true`, returns a preview of the changes without writing anything.
+</ParamField>
+
+```python
+result = await mcp.call_tool("update_network", {
+    "site_id": "default",
+    "network_id": "507f191e810c19729de860ea",
+    "dhcp_dns_1": "1.1.1.1",
+    "dhcp_dns_2": "1.0.0.1",
+    "confirm": True,
+})
+```
+
+---
+
+### `delete_network`
+
+Permanently removes a network from the site. The tool verifies the network exists before deleting it and raises `ResourceNotFoundError` if it cannot be found.
+
+<Warning>
+  Deleting a network is irreversible. Devices and clients on that VLAN segment will lose network access immediately. Verify the `network_id` with `get_network_details` before proceeding.
+</Warning>
+
+<ParamField body="site_id" type="string" required>
+  The site identifier where the network lives.
+</ParamField>
+
+<ParamField body="network_id" type="string" required>
+  The internal ID of the network to delete.
+</ParamField>
+
+<ParamField body="confirm" type="boolean" required>
+  Must be `true` to delete the network.
+</ParamField>
+
+<ParamField body="dry_run" type="boolean">
+  When `true`, confirms the network exists and returns a preview without deleting.
+</ParamField>
+
+```python
+result = await mcp.call_tool("delete_network", {
+    "site_id": "default",
+    "network_id": "507f191e810c19729de860ea",
+    "confirm": True,
+})
+# {"success": true, "deleted_network_id": "507f191e810c19729de860ea"}
+```

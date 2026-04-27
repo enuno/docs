@@ -1,0 +1,186 @@
+---
+title: "Troubleshoot common UniFi MCP Server issues"
+description: "Fix the most common problems with the UniFi MCP Server: startup errors, authentication failures, missing tools, rate limits, and more."
+---
+
+Most problems with the UniFi MCP Server fall into a small number of categories: the server not starting, the AI client not seeing tools, or tools returning unexpected errors or empty results. Use the `health_check` tool as your first diagnostic step—it confirms whether the server is reachable and what API mode it is running in. For more detail, set `MCP_LOG_LEVEL=DEBUG` in your environment to enable verbose logging.
+
+<AccordionGroup>
+  <Accordion title="Server won't start">
+    **Symptoms:** The process exits immediately, or you see an `ImportError` or `ModuleNotFoundError` in the output.
+
+    **Common causes and fixes:**
+
+    - **Missing dependencies** — If you installed from source, ensure you activated your virtual environment and ran `pip install -e ".[dev]"` or `uv pip install -e ".[dev]"`.
+
+    - **Import error for `agnost`** — Version 0.2.4 fixed a critical startup bug where an import error could occur even when `AGNOST_ENABLED=false`. Upgrade to the latest version:
+      ```bash
+      pip install --upgrade unifi-mcp-server
+      ```
+
+    - **Missing required environment variable** — `UNIFI_API_KEY` is required. Check that your `.env` file exists and is loaded, or that the variable is set in your shell:
+      ```bash
+      echo $UNIFI_API_KEY
+      ```
+
+    - **Wrong Python version** — The server requires Python 3.10 or higher:
+      ```bash
+      python --version
+      ```
+  </Accordion>
+
+  <Accordion title="Authentication failed">
+    **Symptoms:** Tools return an authentication error or `401 Unauthorized`, or `health_check` shows an error status.
+
+    **Common causes and fixes:**
+
+    - **Invalid API key** — Your `UNIFI_API_KEY` may be incorrect or expired. API keys are shown only once when created. Generate a new one in your UniFi console at **Settings → Control Plane → Integrations**, then update your `.env` file.
+
+    - **Wrong API type for your key** — Cloud keys (`cloud-v1`, `cloud-ea`) do not work with `UNIFI_API_TYPE=local`, and vice versa. Make sure the `UNIFI_API_TYPE` you set matches the key you created.
+
+    - **Local gateway key mismatch** — Local gateway API keys are separate from cloud API keys. Ensure you are using a key created on your local gateway when using `UNIFI_API_TYPE=local`.
+  </Accordion>
+
+  <Accordion title="Tools not showing in my AI client">
+    **Symptoms:** Claude Desktop, Cursor, or another MCP client shows no UniFi tools, or the server shows as disconnected.
+
+    **Common causes and fixes:**
+
+    - **Configuration file location** — Verify the config file is in the correct location for your client:
+      - Claude Desktop (macOS): `~/Library/Application Support/Claude/claude_desktop_config.json`
+      - Cursor: Open via **View → Open MCP Settings → New MCP Server**
+
+    - **Restart required** — Most MCP clients require a full restart after changing the server configuration. Close and reopen the application completely.
+
+    - **Missing `-i` flag for Docker** — When using Docker, the `-i` flag (stdin open) is required. Also do **not** use `-d` (detached mode) in your MCP client config:
+      ```json
+      {
+        "command": "docker",
+        "args": ["run", "--rm", "-i", "-e", "UNIFI_API_KEY=...", "ghcr.io/enuno/unifi-mcp-server:latest"]
+      }
+      ```
+
+    - **Syntax error in config** — Validate your JSON configuration file with a linter. A missing comma or brace will silently prevent the server from loading.
+  </Accordion>
+
+  <Accordion title="Rate limit exceeded">
+    **Symptoms:** Tools return a rate limit error, or you see `429 Too Many Requests` in the logs.
+
+    **Cause:** The Cloud Early Access API (`cloud-ea`) has a limit of 100 requests per minute. Heavy AI sessions with many tool calls can exceed this quickly.
+
+    **Fixes:**
+
+    - **Switch to `cloud-v1`** — The stable v1 Cloud API allows 10,000 requests per minute:
+      ```env
+      UNIFI_API_TYPE=cloud-v1
+      ```
+
+    - **Switch to local mode** — The local gateway API has no rate limit:
+      ```env
+      UNIFI_API_TYPE=local
+      UNIFI_LOCAL_HOST=192.168.2.1
+      ```
+
+    - **Enable Redis caching** — Caching reduces the number of API calls by serving repeated queries from memory. See [Speed up responses with Redis caching](/advanced/caching).
+  </Accordion>
+
+  <Accordion title="SSL certificate errors">
+    **Symptoms:** Connection errors with messages like `SSL: CERTIFICATE_VERIFY_FAILED` or `certificate verify failed`.
+
+    **Cause:** This occurs when using `UNIFI_API_TYPE=local` and your UniFi gateway uses a self-signed certificate (which is the default for most local gateways).
+
+    **Fix:** Disable SSL verification for local connections:
+
+    ```env
+    UNIFI_LOCAL_VERIFY_SSL=false
+    ```
+
+    <Warning>
+    Only disable SSL verification for local network connections where you control both endpoints. Never disable SSL verification for cloud API connections.
+    </Warning>
+  </Accordion>
+
+  <Accordion title="Tools returning empty results">
+    **Symptoms:** `list_devices`, `list_active_clients`, or other list tools return an empty array even though you have devices or clients on your network.
+
+    **Common causes and fixes:**
+
+    - **Wrong `site_id`** — The default site ID is `default`, but your UniFi setup may use a different identifier. Check the value of `UNIFI_DEFAULT_SITE` in your `.env`, or call `list_all_sites` to see the actual site IDs available:
+      ```env
+      UNIFI_DEFAULT_SITE=default
+      ```
+
+    - **Cloud API limitations** — The `cloud-ea` and `cloud-v1` API modes do **not** support querying individual devices or clients. They only return aggregate site statistics. Switch to `UNIFI_API_TYPE=local` for full device and client access.
+
+    - **No devices adopted** — If you are using local mode and have never adopted devices into this site, the list will be empty. Check the UniFi console to confirm devices are adopted.
+  </Accordion>
+
+  <Accordion title="Cannot create or modify resources">
+    **Symptoms:** Mutating tools such as `create_network`, `create_wlan`, or `create_firewall_rule` return an error about the operation not being supported or the API being read-only.
+
+    **Cause:** The Cloud API modes (`cloud-ea` and `cloud-v1`) are **read-only**. They only support querying aggregate site statistics and do not allow configuration changes.
+
+    **Fix:** Switch to local gateway mode for full read/write access:
+
+    ```env
+    UNIFI_API_TYPE=local
+    UNIFI_LOCAL_HOST=192.168.2.1
+    UNIFI_LOCAL_PORT=443
+    UNIFI_LOCAL_VERIFY_SSL=false
+    ```
+
+    Local mode requires your machine to be on the same network as the UniFi gateway, or connected via VPN.
+  </Accordion>
+
+  <Accordion title="Docker container exits immediately">
+    **Symptoms:** The container starts and then stops within seconds. `docker logs unifi-mcp` shows no output or shows the server starting and then stopping.
+
+    **Cause:** The MCP server uses STDIO transport, which requires an open stdin connection. Without `-i`, Docker closes stdin and the server exits.
+
+    **Fix:** Always include the `-i` flag when running the container for MCP client use:
+
+    ```bash
+    docker run -i --rm \
+      -e UNIFI_API_KEY=your-api-key \
+      -e UNIFI_API_TYPE=local \
+      -e UNIFI_LOCAL_HOST=192.168.2.1 \
+      ghcr.io/enuno/unifi-mcp-server:latest
+    ```
+
+    Do **not** add `-d` (detached/background mode) in MCP client configurations—the client needs the persistent stdin/stdout connection to communicate with the server.
+  </Accordion>
+</AccordionGroup>
+
+## Using the `health_check` tool
+
+The `health_check` tool is the fastest way to verify the server is running and connected to the UniFi API:
+
+```python
+result = await mcp.call_tool("health_check", {})
+```
+
+A healthy response looks like:
+
+```json
+{
+  "status": "healthy",
+  "version": "0.2.4",
+  "api_type": "local"
+}
+```
+
+If `status` is not `"healthy"`, check the server logs for the underlying error.
+
+## Enabling verbose logging
+
+Set `MCP_LOG_LEVEL=DEBUG` to see detailed request and response information, including cache hits/misses, API calls, and webhook processing:
+
+```env
+MCP_LOG_LEVEL=DEBUG
+```
+
+Debug logging reveals the exact API endpoints being called, the HTTP status codes returned, and which cache keys are being read or written. This is the most effective tool for diagnosing unexpected behavior.
+
+<Note>
+If you cannot resolve an issue using this guide, open a ticket on [GitHub Issues](https://github.com/enuno/unifi-mcp-server/issues). Include your server version (`health_check` output), the `MCP_LOG_LEVEL=DEBUG` log output, and a description of the steps to reproduce the problem.
+</Note>

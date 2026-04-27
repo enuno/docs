@@ -1,0 +1,267 @@
+---
+title: "Zone-Based Firewall tools reference"
+description: "Manage firewall zones and assign networks to them on your UniFi local gateway using the Zone-Based Firewall tools in the MCP server."
+---
+
+Zone-Based Firewall (ZBF) lets you group your networks into logical security zones — such as Internal, Guest, IoT, or DMZ — and control which zones can communicate with each other. The tools in this section let you create, update, and delete zones, and assign networks to them, entirely through natural-language requests to your AI assistant.
+
+<Warning>
+  Zone-Based Firewall endpoints are only available when `UNIFI_API_TYPE` is set to `local`. These tools will not work with the Cloud API. You must configure a direct connection to your local UniFi gateway to use them.
+
+  Zone-to-zone policy rules (which traffic is allowed or denied between zones) must be configured in the UniFi Console UI — the API does not expose endpoints to read or write inter-zone policies.
+</Warning>
+
+## Zone management
+
+### `list_firewall_zones`
+
+Returns all firewall zones configured for a site, including which networks belong to each zone.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier to query.
+</ParamField>
+
+```json Example response
+[
+  {
+    "id": "zone-lan",
+    "name": "LAN Zone",
+    "description": "Corporate network",
+    "networkIds": ["net-001", "net-002"]
+  },
+  {
+    "id": "zone-guest",
+    "name": "Guest Zone",
+    "description": "Guest WiFi",
+    "networkIds": ["net-guest-001"]
+  }
+]
+```
+
+---
+
+### `create_firewall_zone`
+
+Creates a new firewall zone and optionally assigns networks to it at creation time.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="name" type="string" required>
+  A display name for the zone (e.g., `"IoT Zone"`).
+</ParamField>
+
+<ParamField path="description" type="string">
+  An optional human-readable description of the zone's purpose.
+</ParamField>
+
+<ParamField path="network_ids" type="array">
+  An optional list of network IDs to assign to the zone immediately. If omitted, an empty zone is created.
+</ParamField>
+
+<ParamField path="confirm" type="boolean" required>
+  Must be `true` to execute. Use `dry_run` first to preview.
+</ParamField>
+
+<ParamField path="dry_run" type="boolean">
+  When `true`, validates and returns the payload that would be sent, without making any changes.
+</ParamField>
+
+<CodeGroup>
+```json Dry run
+{
+  "site_id": "default",
+  "name": "IoT Zone",
+  "description": "Smart home and IoT devices",
+  "network_ids": ["net-iot-001"],
+  "confirm": true,
+  "dry_run": true
+}
+```
+
+```json Create zone
+{
+  "site_id": "default",
+  "name": "IoT Zone",
+  "description": "Smart home and IoT devices",
+  "network_ids": ["net-iot-001"],
+  "confirm": true
+}
+```
+</CodeGroup>
+
+---
+
+### `update_firewall_zone`
+
+Updates an existing zone's name, description, or network membership. Any field you omit is left unchanged. When you supply `network_ids`, it replaces the entire current list — it does not append.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="firewall_zone_id" type="string" required>
+  The ID of the zone to update.
+</ParamField>
+
+<ParamField path="name" type="string">
+  A new display name for the zone.
+</ParamField>
+
+<ParamField path="description" type="string">
+  A new description.
+</ParamField>
+
+<ParamField path="network_ids" type="array">
+  The complete replacement list of network IDs assigned to this zone.
+</ParamField>
+
+<ParamField path="confirm" type="boolean" required>
+  Must be `true` to execute.
+</ParamField>
+
+<ParamField path="dry_run" type="boolean">
+  Preview changes without applying them.
+</ParamField>
+
+---
+
+### `delete_firewall_zone`
+
+Permanently deletes a firewall zone. Any networks that were assigned to the zone are unaffected — they simply lose their zone membership.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="zone_id" type="string" required>
+  The ID of the zone to delete.
+</ParamField>
+
+<ParamField path="confirm" type="boolean" required>
+  Must be `true` to execute.
+</ParamField>
+
+<ParamField path="dry_run" type="boolean">
+  Preview the deletion without applying it.
+</ParamField>
+
+---
+
+## Network assignment
+
+### `assign_network_to_zone`
+
+Adds a single network to an existing zone. If the network is already in the zone, the call is a no-op and returns the existing assignment.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="zone_id" type="string" required>
+  The zone to add the network to.
+</ParamField>
+
+<ParamField path="network_id" type="string" required>
+  The ID of the network to assign.
+</ParamField>
+
+<ParamField path="confirm" type="boolean" required>
+  Must be `true` to execute.
+</ParamField>
+
+<ParamField path="dry_run" type="boolean">
+  Preview the assignment without applying it.
+</ParamField>
+
+---
+
+### `unassign_network_from_zone`
+
+Removes a network from a zone. Returns an error if the network is not currently assigned to the specified zone.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="zone_id" type="string" required>
+  The zone to remove the network from.
+</ParamField>
+
+<ParamField path="network_id" type="string" required>
+  The ID of the network to remove.
+</ParamField>
+
+<ParamField path="confirm" type="boolean" required>
+  Must be `true` to execute.
+</ParamField>
+
+<ParamField path="dry_run" type="boolean">
+  Preview the removal without applying it.
+</ParamField>
+
+---
+
+### `get_zone_networks`
+
+Lists all networks currently assigned to a zone, including their names fetched from the network API.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="zone_id" type="string" required>
+  The zone to inspect.
+</ParamField>
+
+---
+
+## Example: creating a segmented zone layout
+
+This walkthrough creates two zones — one for corporate devices and one for IoT — and assigns networks to each. Always run a dry run first to confirm the payload before applying changes.
+
+```python
+# Step 1: Preview the corporate zone creation
+create_firewall_zone(
+    site_id="default",
+    name="Corporate",
+    description="Trusted corporate devices",
+    network_ids=["net-corp-vlan10"],
+    confirm=True,
+    dry_run=True
+)
+
+# Step 2: Create the corporate zone
+create_firewall_zone(
+    site_id="default",
+    name="Corporate",
+    description="Trusted corporate devices",
+    network_ids=["net-corp-vlan10"],
+    confirm=True
+)
+
+# Step 3: Create the IoT zone
+create_firewall_zone(
+    site_id="default",
+    name="IoT",
+    description="Smart home and IoT devices",
+    network_ids=["net-iot-vlan30"],
+    confirm=True
+)
+
+# Step 4: Assign a camera network to the IoT zone
+assign_network_to_zone(
+    site_id="default",
+    zone_id="<iot-zone-id>",
+    network_id="net-cameras-vlan40",
+    confirm=True
+)
+
+# Step 5: Verify the zone membership
+get_zone_networks(site_id="default", zone_id="<iot-zone-id>")
+```
+
+<Note>
+  After creating your zones, open the UniFi Console UI to configure the zone-to-zone policies that determine which zones can reach each other and on which ports. The API does not support reading or writing these policies directly.
+</Note>

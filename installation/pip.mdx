@@ -1,0 +1,81 @@
+---
+title: "Install UniFi MCP Server with pip or uv"
+description: "Install the UniFi MCP Server from PyPI using pip or uv. Requires Python 3.10 or higher. The unifi-mcp-server command becomes available globally after install."
+---
+
+The UniFi MCP Server is published on [PyPI](https://pypi.org/project/unifi-mcp-server/) and can be installed with either `pip` or `uv`. Once installed, the `unifi-mcp-server` command is available globally in your terminal and can be referenced directly in your MCP client configuration.
+
+<Info>
+  Python 3.10 or higher is required. To check your version, run `python --version` or `python3 --version`.
+</Info>
+
+## Install the package
+
+Choose your preferred package manager. Both install the same package from PyPI.
+
+<CodeGroup>
+
+```bash pip
+pip install unifi-mcp-server
+```
+
+```bash uv
+uv pip install unifi-mcp-server
+```
+
+</CodeGroup>
+
+After installation, the `unifi-mcp-server` command is available globally in your shell.
+
+## Run without installing
+
+If you want to run the server without a permanent install, `uvx` fetches and executes the package directly from PyPI in an isolated environment:
+
+```bash
+uvx unifi-mcp-server
+```
+
+<Tip>
+  `uvx` is ideal for MCP client configurations where you want to keep the host environment clean. It always pulls the latest published version unless you pin a version with `uvx unifi-mcp-server==0.2.4`.
+</Tip>
+
+## Verify the installation
+
+After installing, confirm the command is available:
+
+```bash
+unifi-mcp-server --help
+```
+
+You should see the server's help output listing available options.
+
+## Install a specific version
+
+To pin to a known-good release, specify the version number:
+
+<CodeGroup>
+
+```bash pip
+pip install unifi-mcp-server==0.2.4
+```
+
+```bash uv
+uv pip install unifi-mcp-server==0.2.4
+```
+
+</CodeGroup>
+
+<Note>
+  The current stable release is **0.2.4**. See the [PyPI release history](https://pypi.org/project/unifi-mcp-server/#history) for all available versions.
+</Note>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Configure environment variables" icon="sliders" href="/installation/configuration">
+    Set your API key and connection settings before starting the server.
+  </Card>
+  <Card title="Run with Docker" icon="docker" href="/installation/docker">
+    Prefer a containerized setup? Run the server with Docker or Docker Compose.
+  </Card>
+</CardGroup>

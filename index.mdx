@@ -1,0 +1,67 @@
+---
+title: "UniFi MCP Server: AI-powered network management"
+description: "Connect AI assistants like Claude to your UniFi network. Manage devices, configure firewalls, monitor traffic, and automate operations through natural language."
+---
+
+UniFi MCP Server is an open-source [Model Context Protocol](https://modelcontextprotocol.io) (MCP) server that connects AI assistants directly to your UniFi network infrastructure. Once installed, you can manage devices, configure networks, set firewall rules, monitor traffic, and automate backups — all through natural language conversations with your AI assistant.
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Install the server and connect your first AI assistant in minutes.
+  </Card>
+  <Card title="API Modes" icon="network-wired" href="/api-modes">
+    Choose between Local Gateway, Cloud v1, and Cloud EA access modes.
+  </Card>
+  <Card title="MCP Client Setup" icon="plug" href="/clients/claude-desktop">
+    Connect Claude Desktop, Cursor, or any MCP-compatible AI client.
+  </Card>
+  <Card title="Tool Reference" icon="wrench" href="/tools/overview">
+    Browse all 77 available tools for network management and automation.
+  </Card>
+</CardGroup>
+
+## What you can do
+
+With UniFi MCP Server, your AI assistant gains the ability to interact with your entire UniFi network. You can ask it to list all connected devices, block a suspicious client, create a guest WiFi network, set up firewall rules, or generate a network topology diagram — and it will do so using the official UniFi API.
+
+<CardGroup cols={3}>
+  <Card title="Device Management" icon="server" href="/features/device-management">
+    Monitor, restart, locate, and upgrade UniFi devices.
+  </Card>
+  <Card title="Network Config" icon="diagram-project" href="/features/network-config">
+    Create and manage networks, VLANs, and subnets.
+  </Card>
+  <Card title="Firewall & Security" icon="shield-halved" href="/features/firewall-security">
+    Manage firewall rules, zones, and ACLs.
+  </Card>
+  <Card title="WiFi Management" icon="wifi" href="/features/wifi-management">
+    Create and configure SSIDs with WPA2/WPA3 and guest isolation.
+  </Card>
+  <Card title="QoS & Traffic" icon="gauge-high" href="/features/qos-traffic">
+    Prioritize traffic with QoS profiles and bandwidth controls.
+  </Card>
+  <Card title="Backup & Restore" icon="floppy-disk" href="/features/backup-restore">
+    Schedule automated backups with integrity verification.
+  </Card>
+</CardGroup>
+
+## Get started in 3 steps
+
+<Steps>
+  <Step title="Get your UniFi API key">
+    Log in to [unifi.ui.com](https://unifi.ui.com), navigate to **Settings → Control Plane → Integrations**, and create an API key. Save it — it's shown only once.
+  </Step>
+  <Step title="Install the server">
+    ```bash
+    pip install unifi-mcp-server
+    ```
+    Or use Docker: `docker pull ghcr.io/enuno/unifi-mcp-server:latest`
+  </Step>
+  <Step title="Connect your AI assistant">
+    Add the server to your MCP client configuration (Claude Desktop, Cursor, or any MCP-compatible client) and start managing your network through natural language.
+  </Step>
+</Steps>
+
+<Note>
+  For full network management capabilities — creating networks, configuring firewalls, and controlling devices — use the **Local Gateway API** mode (`UNIFI_API_TYPE=local`). Cloud API modes are limited to read-only site statistics.
+</Note>

@@ -1,0 +1,125 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "luma",
+  "name": "UniFi MCP Server",
+  "colors": {
+    "primary": "#848c8e",
+    "light": "#cfd0d2",
+    "dark": "#11161e"
+  },
+  "favicon": "https://media.brand.dev/2b01fe20-c04b-4a1d-a2f9-1d2789c50a7a.jpg",
+  "logo": {
+    "light": "https://media.brand.dev/5ffd6ce4-2434-4b4b-920a-f8cacac8b48b.svg",
+    "dark": "https://media.brand.dev/5ffd6ce4-2434-4b4b-920a-f8cacac8b48b.svg"
+  },
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/enuno/unifi-mcp-server"
+    }
+  },
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Docs",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "api-modes"
+            ]
+          },
+          {
+            "group": "Installation",
+            "pages": [
+              "installation/pip",
+              "installation/docker",
+              "installation/configuration"
+            ]
+          },
+          {
+            "group": "MCP Client Setup",
+            "pages": [
+              "clients/claude-desktop",
+              "clients/cursor",
+              "clients/other-clients"
+            ]
+          },
+          {
+            "group": "Features",
+            "pages": [
+              "features/device-management",
+              "features/network-config",
+              "features/firewall-security",
+              "features/wifi-management",
+              "features/qos-traffic",
+              "features/backup-restore",
+              "features/multi-site"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "advanced/webhooks",
+              "advanced/caching",
+              "advanced/safety-audit",
+              "advanced/troubleshooting"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Tool Reference",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "tools/overview"
+            ]
+          },
+          {
+            "group": "Read Operations",
+            "pages": [
+              "tools/devices",
+              "tools/clients",
+              "tools/networks",
+              "tools/sites",
+              "tools/topology"
+            ]
+          },
+          {
+            "group": "Write Operations",
+            "pages": [
+              "tools/device-control",
+              "tools/network-config",
+              "tools/firewall",
+              "tools/wifi",
+              "tools/port-forwarding",
+              "tools/port-profiles"
+            ]
+          },
+          {
+            "group": "Security & Access",
+            "pages": [
+              "tools/firewall-zones",
+              "tools/acls",
+              "tools/radius",
+              "tools/vouchers"
+            ]
+          },
+          {
+            "group": "Operations",
+            "pages": [
+              "tools/qos",
+              "tools/backups",
+              "tools/site-manager",
+              "tools/dpi"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

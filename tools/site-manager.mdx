@@ -1,0 +1,326 @@
+---
+title: "Multi-site management tools reference"
+description: "List, compare, and monitor all your UniFi sites from a single view — including health scores, ISP metrics, SD-WAN status, and cross-site search."
+---
+
+The Site Manager tools give you a bird's-eye view of your entire UniFi deployment across multiple sites. You can pull aggregated health metrics, compare performance between locations, search for resources across all sites, and inspect ISP and SD-WAN status — all from a single conversation with your AI assistant.
+
+<Note>
+  Site Manager tools require the Site Manager API to be enabled. Set `UNIFI_SITE_MANAGER_ENABLED=true` in your environment and provide your `SITE_MANAGER_API_KEY` from the UniFi developer portal. All tools in this section will raise an error if the Site Manager API is not enabled.
+</Note>
+
+## Site listing and aggregation
+
+### `list_all_sites_aggregated`
+
+Returns all sites managed under your account with aggregated statistics for each. This is the starting point for cross-site workflows.
+
+No parameters required beyond the server-level settings.
+
+```json Example response
+[
+  {
+    "site_id": "site-abc123",
+    "name": "Headquarters",
+    "device_count": 42,
+    "client_count": 310,
+    "status": "healthy"
+  },
+  {
+    "site_id": "site-def456",
+    "name": "Branch Office - London",
+    "device_count": 8,
+    "client_count": 45,
+    "status": "degraded"
+  }
+]
+```
+
+---
+
+### `get_cross_site_statistics`
+
+Returns aggregated statistics across all sites — total device count, how many devices are online, how many clients are active, and a breakdown of site health states. Useful for a dashboard summary.
+
+No parameters required.
+
+```json Example response
+{
+  "total_sites": 5,
+  "sites_healthy": 4,
+  "sites_degraded": 1,
+  "sites_down": 0,
+  "total_devices": 93,
+  "devices_online": 91,
+  "total_clients": 612,
+  "total_bandwidth_up_mbps": 0.0,
+  "total_bandwidth_down_mbps": 0.0
+}
+```
+
+---
+
+### `get_site_health_summary`
+
+Returns health status for all sites, or for a single site when you supply a `site_id`.
+
+<ParamField path="site_id" type="string">
+  Optional. If provided, returns health data for that site only. If omitted, returns a list of health summaries for all sites.
+</ParamField>
+
+---
+
+### `compare_site_performance`
+
+Ranks all sites by performance metrics — uptime percentage and device online percentage — and returns the best and worst performers along with per-site metrics. Useful for identifying locations that need attention.
+
+No parameters required.
+
+```json Example response
+{
+  "total_sites": 5,
+  "best_performing_site": {
+    "site_id": "site-abc123",
+    "site_name": "Headquarters",
+    "uptime_percentage": 99.9,
+    "device_online_percentage": 100.0,
+    "health_status": "healthy"
+  },
+  "worst_performing_site": {
+    "site_id": "site-xyz789",
+    "site_name": "Warehouse",
+    "uptime_percentage": 87.3,
+    "device_online_percentage": 75.0,
+    "health_status": "degraded"
+  },
+  "average_uptime": 96.4
+}
+```
+
+---
+
+## Site inventory
+
+### `get_site_inventory`
+
+Returns a detailed count of resources at a site — devices, clients, networks, SSIDs, VPN tunnels, and firewall rules. Omit `site_id` to get a summary for all sites.
+
+<ParamField path="site_id" type="string">
+  The site identifier. If omitted, returns inventory for all sites.
+</ParamField>
+
+```json Example: single site
+{
+  "site_id": "site-abc123",
+  "site_name": "Headquarters",
+  "device_count": 42,
+  "device_types": { "uap": 20, "usw": 15, "ugw": 7 },
+  "client_count": 310,
+  "network_count": 8,
+  "ssid_count": 5,
+  "vpn_tunnel_count": 2,
+  "firewall_rule_count": 34
+}
+```
+
+---
+
+## Cross-site search
+
+### `search_across_sites`
+
+Searches for devices, clients, or networks matching a query string across all sites. Useful when you need to locate a device by name or MAC without knowing which site it belongs to.
+
+<ParamField path="query" type="string" required>
+  The search string. Matches against device names, MAC addresses, client names, client IPs, and network names depending on `search_type`.
+</ParamField>
+
+<ParamField path="search_type" type="string">
+  What to search for. Accepted values: `device`, `client`, `network`, `all`. Defaults to `all`.
+</ParamField>
+
+```json Example response
+{
+  "total_results": 2,
+  "search_query": "lobby",
+  "result_type": "all",
+  "results": [
+    {
+      "type": "device",
+      "site_id": "site-abc123",
+      "site_name": "Headquarters",
+      "resource": { "name": "Lobby AP", "mac": "aa:bb:cc:dd:ee:01" }
+    }
+  ]
+}
+```
+
+---
+
+## Internet health
+
+### `get_internet_health`
+
+Returns internet connectivity health metrics — latency, bandwidth, and availability — for a specific site or across all sites.
+
+<ParamField path="site_id" type="string">
+  Optional. If omitted, returns aggregate metrics across all sites.
+</ParamField>
+
+---
+
+## Vantage Points
+
+### `list_vantage_points`
+
+Returns all Vantage Points (monitoring endpoints) configured in your organization. Vantage Points are used by the Site Manager API to measure internet health from different locations.
+
+No parameters required.
+
+---
+
+## ISP metrics
+
+### `get_isp_metrics`
+
+Returns current ISP performance data for a specific site, including download bandwidth, upload bandwidth, latency, jitter, and packet loss.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+```json Example response
+{
+  "site_id": "site-abc123",
+  "isp_name": "Example ISP",
+  "download_bandwidth_mbps": 940.5,
+  "upload_bandwidth_mbps": 115.2,
+  "latency_ms": 8.3,
+  "jitter_ms": 1.1,
+  "packet_loss_percent": 0.0,
+  "timestamp": "2026-04-22T12:00:00Z"
+}
+```
+
+---
+
+### `query_isp_metrics`
+
+Queries ISP metrics with optional filters for time range and site. Returns a list of metric records matching the query.
+
+<ParamField path="site_id" type="string">
+  Optional. Filter by a specific site. Omit for all sites.
+</ParamField>
+
+<ParamField path="start_time" type="string">
+  Optional start time in ISO 8601 format (e.g., `"2026-04-01T00:00:00Z"`).
+</ParamField>
+
+<ParamField path="end_time" type="string">
+  Optional end time in ISO 8601 format.
+</ParamField>
+
+---
+
+## SD-WAN
+
+### `list_sdwan_configs`
+
+Returns all SD-WAN configurations across your organization, including topology type (hub-spoke or mesh), participating sites, and status.
+
+No parameters required.
+
+---
+
+### `get_sdwan_config`
+
+Returns the details of a specific SD-WAN configuration.
+
+<ParamField path="config_id" type="string" required>
+  The SD-WAN configuration identifier.
+</ParamField>
+
+---
+
+### `get_sdwan_config_status`
+
+Returns the deployment status of a specific SD-WAN configuration — how many sites have received it and whether any errors occurred.
+
+<ParamField path="config_id" type="string" required>
+  The SD-WAN configuration identifier.
+</ParamField>
+
+---
+
+## Host management
+
+Hosts are the physical or virtual UniFi consoles (UDM, CloudKey, etc.) that manage one or more sites.
+
+### `list_hosts`
+
+Returns all managed UniFi hosts in your organization.
+
+<ParamField path="limit" type="integer">
+  Maximum number of hosts to return.
+</ParamField>
+
+<ParamField path="offset" type="integer">
+  Number of hosts to skip (for pagination).
+</ParamField>
+
+---
+
+### `get_host`
+
+Returns details of a specific host, including model, firmware version, and online status.
+
+<ParamField path="host_id" type="string" required>
+  The host identifier.
+</ParamField>
+
+---
+
+## API version
+
+### `get_version_control`
+
+Returns the current Site Manager API version, the latest available version, and any deprecated versions. Useful for confirming compatibility before relying on specific features.
+
+No parameters required.
+
+---
+
+## Example: cross-site analytics query
+
+This example shows how to get a complete picture of your deployment health and identify sites that need attention.
+
+```python
+# Step 1: Get an overview of all sites
+sites = list_all_sites_aggregated()
+print(f"Managing {len(sites)} sites")
+
+# Step 2: Get cross-site health summary
+stats = get_cross_site_statistics()
+print(f"Healthy: {stats['sites_healthy']}, Degraded: {stats['sites_degraded']}, Down: {stats['sites_down']}")
+
+# Step 3: Identify the worst-performing site
+comparison = compare_site_performance()
+worst = comparison["worst_performing_site"]
+print(f"Site needing attention: {worst['site_name']} — {worst['uptime_percentage']}% uptime")
+
+# Step 4: Drill into ISP metrics for that site
+isp = get_isp_metrics(site_id=worst["site_id"])
+print(f"ISP: {isp['isp_name']} | Latency: {isp['latency_ms']}ms | Loss: {isp['packet_loss_percent']}%")
+
+# Step 5: Get full inventory for that site
+inventory = get_site_inventory(site_id=worst["site_id"])
+print(f"Devices: {inventory['device_count']}, Clients: {inventory['client_count']}")
+
+# Step 6: Search for any device named 'router' across all sites
+results = search_across_sites(query="router", search_type="device")
+print(f"Found {results['total_results']} routers across all sites")
+```
+
+<Tip>
+  Use `compare_site_performance()` in a regular check-in workflow to surface sites with declining uptime before they become critical problems.
+</Tip>

@@ -1,0 +1,169 @@
+---
+title: "Connect UniFi MCP Server to Claude Desktop"
+description: "Add the UniFi MCP Server to Claude Desktop on macOS or Windows. Configure pip, uvx, or Docker and start issuing network commands through Claude."
+---
+
+Claude Desktop is the desktop application for Anthropic's Claude AI, and it supports MCP servers natively. Once you add the UniFi MCP Server to Claude Desktop's configuration file, Claude gains direct access to your UniFi network—so you can ask questions and issue commands in plain language without leaving your conversation.
+
+## Prerequisites
+
+- Claude Desktop installed on macOS or Windows
+- A UniFi API key (from **Settings → Control Plane → Integrations** in the UniFi Site Manager)
+- One of the following: the `unifi-mcp-server` PyPI package installed, `uv` installed, or Docker
+
+## Config file location
+
+Claude Desktop reads its MCP server list from a JSON file on your machine:
+
+- **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+
+If the file does not exist yet, create it as an empty JSON object (`{}`).
+
+## Setup
+
+<Steps>
+  <Step title="Install the package">
+    Choose the installation method that matches your setup.
+
+    <Tabs>
+      <Tab title="PyPI package">
+        Install `unifi-mcp-server` from PyPI using pip or uv:
+
+        ```bash
+        pip install unifi-mcp-server
+        ```
+
+        After installation, the `unifi-mcp-server` command is available in your PATH.
+      </Tab>
+      <Tab title="uvx">
+        If you have `uv` installed, you can skip a separate installation step. `uvx` will download and run the package automatically when Claude Desktop starts the server.
+
+        ```bash
+        # Verify uv is installed
+        uvx --version
+        ```
+      </Tab>
+      <Tab title="Docker">
+        Pull the image so it is available locally:
+
+        ```bash
+        docker pull ghcr.io/enuno/unifi-mcp-server:latest
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step title="Edit the config file">
+    Open your Claude Desktop config file and add the `mcpServers` block. Use the tab below that matches your installation method.
+
+    <Tabs>
+      <Tab title="PyPI package">
+        ```json
+        {
+          "mcpServers": {
+            "unifi": {
+              "command": "unifi-mcp-server",
+              "env": {
+                "UNIFI_API_KEY": "your-api-key-here",
+                "UNIFI_API_TYPE": "local",
+                "UNIFI_LOCAL_HOST": "192.168.2.1"
+              }
+            }
+          }
+        }
+        ```
+
+        For cloud API access instead of a local gateway, replace the `env` block with:
+
+        ```json
+        "env": {
+          "UNIFI_API_KEY": "your-api-key-here",
+          "UNIFI_API_TYPE": "cloud-v1"
+        }
+        ```
+      </Tab>
+      <Tab title="uvx">
+        ```json
+        {
+          "mcpServers": {
+            "unifi": {
+              "command": "uvx",
+              "args": ["unifi-mcp-server"],
+              "env": {
+                "UNIFI_API_KEY": "your-api-key-here",
+                "UNIFI_API_TYPE": "local",
+                "UNIFI_LOCAL_HOST": "192.168.2.1"
+              }
+            }
+          }
+        }
+        ```
+      </Tab>
+      <Tab title="Docker">
+        ```json
+        {
+          "mcpServers": {
+            "unifi": {
+              "command": "docker",
+              "args": [
+                "run",
+                "-i",
+                "--rm",
+                "-e",
+                "UNIFI_API_KEY=your-api-key-here",
+                "-e",
+                "UNIFI_API_TYPE=local",
+                "-e",
+                "UNIFI_LOCAL_HOST=192.168.2.1",
+                "ghcr.io/enuno/unifi-mcp-server:latest"
+              ]
+            }
+          }
+        }
+        ```
+
+        <Warning>
+          Do not add the `-d` (detached) flag. Claude Desktop needs to hold an open stdin/stdout connection to the container, which only works in the foreground.
+        </Warning>
+      </Tab>
+    </Tabs>
+
+    Replace `your-api-key-here` with your actual UniFi API key and `192.168.2.1` with your gateway's IP address.
+  </Step>
+
+  <Step title="Restart Claude Desktop">
+    Save the config file and fully quit Claude Desktop—not just close the window. On macOS, right-click the Dock icon and choose **Quit**. On Windows, right-click the taskbar icon and choose **Exit**.
+
+    Reopen Claude Desktop. The UniFi MCP Server starts automatically in the background.
+
+    <Note>
+      Claude Desktop only reads the config file at startup. Any time you change the config, you must restart the application for changes to take effect.
+    </Note>
+  </Step>
+
+  <Step title="Test with a sample prompt">
+    Start a new conversation in Claude Desktop and try one of these prompts:
+
+    - "List my UniFi devices"
+    - "Show connected clients on site default"
+    - "What is the current status of my UniFi access points?"
+
+    Claude will invoke the appropriate MCP tool and return results from your network. If you see an error, double-check that the API key and gateway IP in your config file are correct.
+  </Step>
+</Steps>
+
+## Environment variables reference
+
+| Variable | Required | Description |
+|---|---|---|
+| `UNIFI_API_KEY` | Yes | Your UniFi API key from unifi.ui.com |
+| `UNIFI_API_TYPE` | Yes | `local`, `cloud-v1`, or `cloud-ea` |
+| `UNIFI_LOCAL_HOST` | For local | IP address of your UniFi gateway |
+| `UNIFI_LOCAL_PORT` | No | Gateway port (default: `443`) |
+| `UNIFI_LOCAL_VERIFY_SSL` | No | SSL verification (default: `false`) |
+| `UNIFI_DEFAULT_SITE` | No | Default site ID (default: `default`) |
+
+<Tip>
+  The local gateway API (`UNIFI_API_TYPE=local`) gives you full access to device management, network configuration, firewall rules, and more. Cloud API modes are limited to aggregate statistics and monitoring.
+</Tip>

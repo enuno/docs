@@ -1,0 +1,586 @@
+---
+title: "RADIUS and guest portal tools reference"
+description: "Configure RADIUS authentication profiles, manage local RADIUS accounts, and set up guest portal settings and hotspot packages for your UniFi sites."
+---
+
+RADIUS authentication is the backbone of enterprise Wi-Fi security (802.1X) and can also power guest portal login flows. These tools let you manage RADIUS server profiles, create local user accounts for your built-in RADIUS server, configure the guest portal experience, and define hotspot packages — all from a conversation with your AI assistant.
+
+## RADIUS profiles
+
+A RADIUS profile tells UniFi where to send authentication requests. You can point it at an external RADIUS server or at UniFi's built-in RADIUS server.
+
+### `list_radius_profiles`
+
+Returns all RADIUS profiles configured for a site.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+---
+
+### `get_radius_profile`
+
+Returns the details of a single RADIUS profile.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="profile_id" type="string" required>
+  The RADIUS profile identifier.
+</ParamField>
+
+---
+
+### `create_radius_profile`
+
+Creates a new RADIUS profile pointing to an authentication server.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="name" type="string" required>
+  A display name for this profile (e.g., `"Corporate 802.1X"`).
+</ParamField>
+
+<ParamField path="auth_server" type="string" required>
+  The IP address or hostname of the RADIUS authentication server.
+</ParamField>
+
+<ParamField path="auth_secret" type="string" required>
+  The shared secret used to authenticate requests to the RADIUS server.
+</ParamField>
+
+<ParamField path="auth_port" type="integer">
+  The authentication port. Defaults to `1812`.
+</ParamField>
+
+<ParamField path="acct_server" type="string">
+  IP address or hostname of a separate RADIUS accounting server. Optional.
+</ParamField>
+
+<ParamField path="acct_port" type="integer">
+  The accounting port. Defaults to `1813`.
+</ParamField>
+
+<ParamField path="acct_secret" type="string">
+  Shared secret for the accounting server if different from the auth secret.
+</ParamField>
+
+<ParamField path="use_same_secret" type="boolean">
+  When `true`, the `auth_secret` is used for accounting as well. Defaults to `true`.
+</ParamField>
+
+<ParamField path="vlan_enabled" type="boolean">
+  When `true`, allows the RADIUS server to dynamically assign VLANs via tunnel attributes. Defaults to `false`.
+</ParamField>
+
+<ParamField path="confirm" type="boolean" required>
+  Must be `true` to create the profile.
+</ParamField>
+
+<ParamField path="dry_run" type="boolean">
+  Preview the profile that would be created without applying it.
+</ParamField>
+
+<Info>
+  Shared secrets are automatically redacted in dry-run output and audit logs. They are never written to log files in plain text.
+</Info>
+
+```python Example: 802.1X profile with VLAN assignment
+create_radius_profile(
+    site_id="default",
+    name="Corporate 802.1X",
+    auth_server="192.168.1.50",
+    auth_secret="my-strong-secret",
+    auth_port=1812,
+    acct_server="192.168.1.50",
+    acct_port=1813,
+    use_same_secret=True,
+    vlan_enabled=True,
+    confirm=True
+)
+```
+
+---
+
+### `update_radius_profile`
+
+Updates an existing RADIUS profile. Only the fields you supply are changed.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="profile_id" type="string" required>
+  The RADIUS profile identifier.
+</ParamField>
+
+<ParamField path="name" type="string">
+  New profile name.
+</ParamField>
+
+<ParamField path="auth_server" type="string">
+  New authentication server IP or hostname.
+</ParamField>
+
+<ParamField path="auth_secret" type="string">
+  New shared secret for authentication.
+</ParamField>
+
+<ParamField path="auth_port" type="integer">
+  New authentication port.
+</ParamField>
+
+<ParamField path="acct_server" type="string">
+  New accounting server IP or hostname.
+</ParamField>
+
+<ParamField path="acct_port" type="integer">
+  New accounting port.
+</ParamField>
+
+<ParamField path="acct_secret" type="string">
+  New accounting server secret.
+</ParamField>
+
+<ParamField path="vlan_enabled" type="boolean">
+  Enable or disable VLAN assignment.
+</ParamField>
+
+<ParamField path="enabled" type="boolean">
+  Enable or disable the profile.
+</ParamField>
+
+<ParamField path="confirm" type="boolean" required>
+  Must be `true` to apply.
+</ParamField>
+
+<ParamField path="dry_run" type="boolean">
+  Preview changes without applying them.
+</ParamField>
+
+---
+
+### `delete_radius_profile`
+
+Permanently deletes a RADIUS profile. Ensure no active SSIDs reference this profile before deleting.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="profile_id" type="string" required>
+  The RADIUS profile identifier.
+</ParamField>
+
+<ParamField path="confirm" type="boolean" required>
+  Must be `true` to delete.
+</ParamField>
+
+<ParamField path="dry_run" type="boolean">
+  Preview the deletion without applying it.
+</ParamField>
+
+---
+
+## RADIUS accounts
+
+RADIUS accounts are local credentials stored on the UniFi controller. They are used with UniFi's built-in RADIUS server for 802.1X or guest portal authentication without an external server.
+
+### `list_radius_accounts`
+
+Returns all local RADIUS accounts for a site. Passwords are always redacted in the response.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+---
+
+### `get_radius_account`
+
+Returns the details of a single RADIUS account. The password field is always redacted.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="account_id" type="string" required>
+  The account identifier.
+</ParamField>
+
+---
+
+### `create_radius_account`
+
+Creates a new local RADIUS user account. When `vlan_id` is supplied, the appropriate RADIUS tunnel attributes (`tunnel_type=13`, `tunnel_medium_type=6`) are set automatically.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="username" type="string" required>
+  The login username for this account.
+</ParamField>
+
+<ParamField path="password" type="string" required>
+  The account password. This is stored securely and never returned in plain text after creation.
+</ParamField>
+
+<ParamField path="vlan_id" type="integer">
+  If provided, the account will be assigned to this VLAN on successful authentication. Automatically sets the RADIUS tunnel type and medium attributes.
+</ParamField>
+
+<ParamField path="tunnel_type" type="integer">
+  RADIUS tunnel type override. Defaults to `13` (VLAN) when `vlan_id` is provided.
+</ParamField>
+
+<ParamField path="tunnel_medium_type" type="integer">
+  RADIUS tunnel medium type override. Defaults to `6` (802) when `vlan_id` is provided.
+</ParamField>
+
+<ParamField path="enabled" type="boolean">
+  Whether the account is active. Defaults to `true`.
+</ParamField>
+
+<ParamField path="note" type="string">
+  An optional administrative note.
+</ParamField>
+
+<ParamField path="confirm" type="boolean" required>
+  Must be `true` to create the account.
+</ParamField>
+
+<ParamField path="dry_run" type="boolean">
+  Preview creation without applying it. The password is redacted in dry-run output.
+</ParamField>
+
+---
+
+### `update_radius_account`
+
+Updates an existing RADIUS account. Only the fields you supply are changed.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="account_id" type="string" required>
+  The account identifier.
+</ParamField>
+
+<ParamField path="username" type="string">
+  New username.
+</ParamField>
+
+<ParamField path="password" type="string">
+  New password.
+</ParamField>
+
+<ParamField path="vlan_id" type="integer">
+  New VLAN assignment.
+</ParamField>
+
+<ParamField path="tunnel_type" type="integer">
+  New tunnel type.
+</ParamField>
+
+<ParamField path="tunnel_medium_type" type="integer">
+  New tunnel medium type.
+</ParamField>
+
+<ParamField path="enabled" type="boolean">
+  Enable or disable the account.
+</ParamField>
+
+<ParamField path="note" type="string">
+  Updated admin note.
+</ParamField>
+
+<ParamField path="confirm" type="boolean" required>
+  Must be `true` to apply.
+</ParamField>
+
+<ParamField path="dry_run" type="boolean">
+  Preview changes without applying them.
+</ParamField>
+
+---
+
+### `delete_radius_account`
+
+Permanently deletes a RADIUS account.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="account_id" type="string" required>
+  The account identifier.
+</ParamField>
+
+<ParamField path="confirm" type="boolean" required>
+  Must be `true` to delete.
+</ParamField>
+
+<ParamField path="dry_run" type="boolean">
+  Preview the deletion without applying it.
+</ParamField>
+
+---
+
+## Guest portal
+
+### `get_guest_portal_config`
+
+Returns the current guest portal configuration for a site.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+---
+
+### `configure_guest_portal`
+
+Updates the guest portal settings. Only the fields you supply are changed.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="portal_title" type="string">
+  The title shown on the guest login page.
+</ParamField>
+
+<ParamField path="auth_method" type="string">
+  The authentication method. Accepted values: `none`, `password`, `voucher`, `radius`, `external`.
+</ParamField>
+
+<ParamField path="password" type="string">
+  A shared password for the portal (used when `auth_method` is `password`). Redacted in logs.
+</ParamField>
+
+<ParamField path="session_timeout" type="integer">
+  How long a guest session lasts before requiring re-authentication, in minutes.
+</ParamField>
+
+<ParamField path="redirect_enabled" type="boolean">
+  When `true`, guests are redirected to a custom URL after login.
+</ParamField>
+
+<ParamField path="redirect_url" type="string">
+  The URL guests are sent to after successful authentication.
+</ParamField>
+
+<ParamField path="terms_of_service_enabled" type="boolean">
+  Require guests to accept terms of service before connecting.
+</ParamField>
+
+<ParamField path="terms_of_service_text" type="string">
+  The full text of your terms of service.
+</ParamField>
+
+<ParamField path="confirm" type="boolean" required>
+  Must be `true` to apply changes.
+</ParamField>
+
+<ParamField path="dry_run" type="boolean">
+  Preview changes without applying them.
+</ParamField>
+
+---
+
+## Hotspot packages
+
+Hotspot packages define timed access tiers that guests can purchase or be assigned. Each package specifies a duration and optional bandwidth limits.
+
+### `list_hotspot_packages`
+
+Returns all hotspot packages for a site.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+---
+
+### `get_hotspot_package`
+
+Returns the details of a single hotspot package.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="package_id" type="string" required>
+  The package identifier.
+</ParamField>
+
+---
+
+### `create_hotspot_package`
+
+Creates a new hotspot access package.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="name" type="string" required>
+  A display name for the package (e.g., `"1-Hour Basic"`).
+</ParamField>
+
+<ParamField path="duration_minutes" type="integer" required>
+  How long the package grants access, in minutes.
+</ParamField>
+
+<ParamField path="download_limit_kbps" type="integer">
+  Download speed cap in kilobits per second. Omit for unlimited.
+</ParamField>
+
+<ParamField path="upload_limit_kbps" type="integer">
+  Upload speed cap in kilobits per second. Omit for unlimited.
+</ParamField>
+
+<ParamField path="download_quota_mb" type="integer">
+  Total download data quota in megabytes. Omit for unlimited.
+</ParamField>
+
+<ParamField path="upload_quota_mb" type="integer">
+  Total upload data quota in megabytes. Omit for unlimited.
+</ParamField>
+
+<ParamField path="price" type="number">
+  Package price (for display/record-keeping purposes).
+</ParamField>
+
+<ParamField path="currency" type="string">
+  Currency code for the price. Defaults to `"USD"`.
+</ParamField>
+
+<ParamField path="confirm" type="boolean" required>
+  Must be `true` to create the package.
+</ParamField>
+
+<ParamField path="dry_run" type="boolean">
+  Preview creation without applying it.
+</ParamField>
+
+---
+
+### `update_hotspot_package`
+
+Updates an existing hotspot package. Only the fields you supply are changed.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="package_id" type="string" required>
+  The package identifier.
+</ParamField>
+
+<ParamField path="name" type="string">
+  New package name.
+</ParamField>
+
+<ParamField path="duration_minutes" type="integer">
+  New duration in minutes.
+</ParamField>
+
+<ParamField path="download_limit_kbps" type="integer">
+  New download speed cap.
+</ParamField>
+
+<ParamField path="upload_limit_kbps" type="integer">
+  New upload speed cap.
+</ParamField>
+
+<ParamField path="download_quota_mb" type="integer">
+  New download data quota.
+</ParamField>
+
+<ParamField path="upload_quota_mb" type="integer">
+  New upload data quota.
+</ParamField>
+
+<ParamField path="price" type="number">
+  New price.
+</ParamField>
+
+<ParamField path="currency" type="string">
+  New currency code.
+</ParamField>
+
+<ParamField path="enabled" type="boolean">
+  Enable or disable the package.
+</ParamField>
+
+<ParamField path="confirm" type="boolean" required>
+  Must be `true` to apply.
+</ParamField>
+
+<ParamField path="dry_run" type="boolean">
+  Preview changes without applying them.
+</ParamField>
+
+---
+
+### `delete_hotspot_package`
+
+Permanently deletes a hotspot package.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="package_id" type="string" required>
+  The package identifier.
+</ParamField>
+
+<ParamField path="confirm" type="boolean" required>
+  Must be `true` to delete.
+</ParamField>
+
+<ParamField path="dry_run" type="boolean">
+  Preview the deletion without applying it.
+</ParamField>
+
+---
+
+## Example: 802.1X with VLAN assignment
+
+This walkthrough configures a RADIUS profile pointing at an external FreeRADIUS server and creates a local account for a device that cannot use certificates.
+
+```python
+# Step 1: Create the RADIUS profile
+create_radius_profile(
+    site_id="default",
+    name="Corporate 802.1X",
+    auth_server="10.0.0.50",
+    auth_secret="supersecret",
+    auth_port=1812,
+    acct_port=1813,
+    use_same_secret=True,
+    vlan_enabled=True,   # Allow server to assign VLANs dynamically
+    confirm=True
+)
+
+# Step 2: Create a local account for a device using PAP (no cert)
+create_radius_account(
+    site_id="default",
+    username="printer-lobby",
+    password="device-password",
+    vlan_id=20,          # Automatically sets tunnel_type=13, tunnel_medium_type=6
+    note="Lobby printer — no 802.1X cert support",
+    confirm=True
+)
+```
+
+<Note>
+  The RADIUS profile must be linked to an SSID or wired port profile in the UniFi Console UI. The tools above manage only the RADIUS profile configuration itself.
+</Note>

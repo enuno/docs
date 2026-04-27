@@ -1,0 +1,303 @@
+---
+title: "WiFi and SSID management tools reference"
+description: "Reference for UniFi MCP tools that list, create, update, and delete wireless SSIDs, and retrieve per-WLAN client and bandwidth statistics."
+---
+
+The WiFi tools give you full control over wireless networks (SSIDs) in a UniFi site. You can read existing SSIDs and their live statistics without any confirmation, and use the write tools to create new networks, modify security settings, or remove SSIDs you no longer need. The create tool supports the full range of UniFi WLAN options — guest mode, WPA3, VLAN isolation, band steering, AP group targeting, and IoT optimizations — so you can express the exact wireless policy you need.
+
+## Tools
+
+### `list_wlans`
+
+Returns all wireless networks configured in the site. This is a read-only operation.
+
+<ParamField body="site_id" type="string" required>
+  The site identifier to query.
+</ParamField>
+
+<ParamField body="limit" type="integer">
+  Maximum number of WLANs to return.
+</ParamField>
+
+<ParamField body="offset" type="integer">
+  Number of WLANs to skip, for pagination.
+</ParamField>
+
+```python
+wlans = await mcp.call_tool("list_wlans", {
+    "site_id": "default",
+})
+```
+
+---
+
+### `create_wlan`
+
+Creates a new wireless network (SSID). You must supply a name and a security type. For `wpapsk` security a password is required. All other parameters are optional.
+
+<Warning>
+  Requires `confirm=True`. Passwords are automatically masked in audit logs, but you should treat them as sensitive values and avoid hardcoding them in scripts.
+</Warning>
+
+<ParamField body="site_id" type="string" required>
+  The site identifier where the WLAN will be created.
+</ParamField>
+
+<ParamField body="name" type="string" required>
+  The SSID broadcast name (e.g. `"Guest WiFi"`).
+</ParamField>
+
+<ParamField body="security" type="string" required>
+  Security mode. Accepted values: `open`, `wpapsk`, `wpaeap`.
+</ParamField>
+
+<ParamField body="password" type="string">
+  WiFi passphrase. Required when `security` is `wpapsk`.
+</ParamField>
+
+<ParamField body="enabled" type="boolean">
+  Whether the SSID is active immediately after creation. Defaults to `true`.
+</ParamField>
+
+<ParamField body="is_guest" type="boolean">
+  Marks this network as a guest network, enabling guest portal and isolation features. Defaults to `false`.
+</ParamField>
+
+<ParamField body="wpa_mode" type="string">
+  WPA protocol version. Accepted values: `wpa`, `wpa2`, `wpa3`. Defaults to `wpa2`.
+</ParamField>
+
+<ParamField body="wpa_enc" type="string">
+  WPA encryption cipher. Accepted values: `tkip`, `ccmp`, `ccmp-tkip`. Defaults to `ccmp`.
+</ParamField>
+
+<ParamField body="vlan_id" type="integer">
+  VLAN tag (1–4094) to associate with this SSID for network isolation. When set, wireless clients are placed into that VLAN.
+</ParamField>
+
+<ParamField body="networkconf_id" type="string">
+  The internal ID of an existing network configuration to bind this SSID to.
+</ParamField>
+
+<ParamField body="ap_group_ids" type="array">
+  List of AP group IDs that should broadcast this SSID. Requires `ap_group_mode` to be set.
+</ParamField>
+
+<ParamField body="ap_group_mode" type="string">
+  How AP groups are applied. Accepted values: `groups` (selected groups only), `all` (all APs).
+</ParamField>
+
+<ParamField body="wlan_bands" type="array">
+  WiFi frequency bands to broadcast on. Accepted values: `"2g"`, `"5g"`. Supply one or both (e.g. `["2g", "5g"]`).
+</ParamField>
+
+<ParamField body="optimize_iot_wifi_connectivity" type="boolean">
+  Enables UniFi's IoT optimizations for this SSID, including 802.11b support and disabling OUI-based 2.4 GHz suppression.
+</ParamField>
+
+<ParamField body="minrate_ng_enabled" type="boolean">
+  Enables a minimum data rate requirement on 2.4 GHz to encourage devices to use 5 GHz when available.
+</ParamField>
+
+<ParamField body="minrate_ng_data_rate_kbps" type="integer">
+  Minimum 2.4 GHz data rate in kbps (e.g. `1000` for 1 Mbps). Only used when `minrate_ng_enabled` is `true`.
+</ParamField>
+
+<ParamField body="hide_ssid" type="boolean">
+  When `true`, the SSID is not broadcast. Clients must connect manually. Defaults to `false`.
+</ParamField>
+
+<ParamField body="confirm" type="boolean" required>
+  Must be `true` to create the WLAN.
+</ParamField>
+
+<ParamField body="dry_run" type="boolean">
+  When `true`, validates all parameters and returns the WLAN payload that would be submitted, without creating anything. Passwords are excluded from the dry-run response.
+</ParamField>
+
+**Example: creating a guest WiFi with VLAN isolation**
+
+<CodeGroup>
+
+```python dry run
+result = await mcp.call_tool("create_wlan", {
+    "site_id": "default",
+    "name": "Guest WiFi",
+    "security": "wpapsk",
+    "password": "welcome2024!",
+    "is_guest": True,
+    "wpa_mode": "wpa2",
+    "vlan_id": 100,
+    "dry_run": True,
+    "confirm": True,
+})
+# {"dry_run": true, "would_create": {...}}  # password not included in dry-run output
+```
+
+```python execute
+result = await mcp.call_tool("create_wlan", {
+    "site_id": "default",
+    "name": "Guest WiFi",
+    "security": "wpapsk",
+    "password": "welcome2024!",
+    "is_guest": True,
+    "wpa_mode": "wpa2",
+    "vlan_id": 100,
+    "confirm": True,
+})
+```
+
+</CodeGroup>
+
+<Tip>
+  For an IoT-dedicated SSID, set `optimize_iot_wifi_connectivity=True` and `wlan_bands=["2g"]` to accommodate older devices, and pair it with a dedicated VLAN to isolate IoT traffic from the rest of your network.
+</Tip>
+
+---
+
+### `update_wlan`
+
+Modifies an existing wireless network. The tool fetches the current WLAN configuration and merges only the fields you supply; all other settings are preserved.
+
+<ParamField body="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField body="wlan_id" type="string" required>
+  The internal ID of the WLAN to update. Use `list_wlans` to find this value.
+</ParamField>
+
+<ParamField body="name" type="string">
+  New SSID name.
+</ParamField>
+
+<ParamField body="security" type="string">
+  New security type: `open`, `wpapsk`, or `wpaeap`.
+</ParamField>
+
+<ParamField body="password" type="string">
+  New WiFi passphrase.
+</ParamField>
+
+<ParamField body="enabled" type="boolean">
+  Enable or disable the SSID without deleting it.
+</ParamField>
+
+<ParamField body="is_guest" type="boolean">
+  Mark or unmark the network as a guest network.
+</ParamField>
+
+<ParamField body="wpa_mode" type="string">
+  New WPA version: `wpa`, `wpa2`, or `wpa3`.
+</ParamField>
+
+<ParamField body="wpa_enc" type="string">
+  New encryption cipher: `tkip`, `ccmp`, or `ccmp-tkip`.
+</ParamField>
+
+<ParamField body="vlan_id" type="integer">
+  New VLAN tag (1–4094).
+</ParamField>
+
+<ParamField body="hide_ssid" type="boolean">
+  Show or hide the SSID broadcast.
+</ParamField>
+
+<ParamField body="confirm" type="boolean" required>
+  Must be `true` to apply changes.
+</ParamField>
+
+<ParamField body="dry_run" type="boolean">
+  When `true`, returns a preview without writing changes.
+</ParamField>
+
+```python
+result = await mcp.call_tool("update_wlan", {
+    "site_id": "default",
+    "wlan_id": "507f1f77bcf86cd799439011",
+    "wpa_mode": "wpa3",
+    "confirm": True,
+})
+```
+
+---
+
+### `delete_wlan`
+
+Permanently removes a wireless network from the site. The tool verifies the WLAN exists before deleting and raises `ResourceNotFoundError` if it cannot be found.
+
+<Warning>
+  Deleting a WLAN immediately disconnects all clients on that SSID. Use `update_wlan` with `enabled=false` if you want to disable the network temporarily instead.
+</Warning>
+
+<ParamField body="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField body="wlan_id" type="string" required>
+  The internal ID of the WLAN to delete.
+</ParamField>
+
+<ParamField body="confirm" type="boolean" required>
+  Must be `true` to delete the WLAN.
+</ParamField>
+
+<ParamField body="dry_run" type="boolean">
+  When `true`, confirms the WLAN exists and returns a preview without deleting.
+</ParamField>
+
+```python
+result = await mcp.call_tool("delete_wlan", {
+    "site_id": "default",
+    "wlan_id": "507f1f77bcf86cd799439011",
+    "confirm": True,
+})
+# {"success": true, "deleted_wlan_id": "507f1f77bcf86cd799439011"}
+```
+
+---
+
+### `get_wlan_statistics`
+
+Returns usage statistics for one or all WLANs in a site — including connected client counts and cumulative transmit/receive byte totals. This is a read-only operation.
+
+<ParamField body="site_id" type="string" required>
+  The site identifier to query.
+</ParamField>
+
+<ParamField body="wlan_id" type="string">
+  When provided, returns statistics for that specific WLAN only. When omitted, returns an aggregate for all WLANs in the site.
+</ParamField>
+
+<CodeGroup>
+
+```python all WLANs
+result = await mcp.call_tool("get_wlan_statistics", {
+    "site_id": "default",
+})
+# {
+#   "site_id": "default",
+#   "wlans": [
+#     {
+#       "wlan_id": "507f1f77bcf86cd799439011",
+#       "name": "HomeWiFi",
+#       "enabled": true,
+#       "security": "wpapsk",
+#       "is_guest": false,
+#       "client_count": 12,
+#       "total_tx_bytes": 10240000000,
+#       "total_rx_bytes": 20480000000,
+#       "total_bytes": 30720000000
+#     }
+#   ]
+# }
+```
+
+```python single WLAN
+result = await mcp.call_tool("get_wlan_statistics", {
+    "site_id": "default",
+    "wlan_id": "507f1f77bcf86cd799439011",
+})
+```
+
+</CodeGroup>

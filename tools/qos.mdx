@@ -1,0 +1,271 @@
+---
+title: "QoS and traffic shaping tools reference"
+description: "Manage traffic routing policies on your UniFi gateway to control how traffic is prioritized, marked, or shaped across your network."
+---
+
+Traffic routing policies let you control how your UniFi gateway handles specific flows of network traffic. You can allow or deny traffic, mark packets with a DSCP value for downstream QoS, shape (rate-limit) a specific flow, or change routing behavior based on source, destination, protocol, or VLAN. These tools let you manage those routing rules directly from a conversation with your AI assistant.
+
+<Note>
+  QoS profile management (rest/qosprofile) and ProAV profile management endpoints were verified to not exist in the UniFi API and have been removed from the server. The tools documented here — traffic routing policies — use the `/ea/sites/{siteId}/rest/routing` endpoint, which is confirmed to work on supported hardware.
+</Note>
+
+## Traffic routes
+
+### `list_traffic_routes`
+
+Returns all traffic routing policies for a site, sorted by priority.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="limit" type="integer">
+  Maximum number of routes to return. Defaults to `100`.
+</ParamField>
+
+<ParamField path="offset" type="integer">
+  Number of routes to skip. Defaults to `0`.
+</ParamField>
+
+```json Example response
+[
+  {
+    "id": "route-001",
+    "name": "Prioritize Video Calls",
+    "action": "mark",
+    "dscp_marking": 46,
+    "priority": 10,
+    "enabled": true,
+    "match_criteria": {
+      "destination_port": 443,
+      "protocol": "udp"
+    }
+  }
+]
+```
+
+---
+
+### `create_traffic_route`
+
+Creates a new traffic routing policy. Requires explicit confirmation.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="name" type="string" required>
+  A descriptive name for this route.
+</ParamField>
+
+<ParamField path="action" type="string" required>
+  What the gateway should do when traffic matches. Accepted values:
+
+  - `allow` — pass traffic through normally
+  - `deny` — drop matching traffic
+  - `mark` — stamp packets with a DSCP value (use with `dscp_marking`)
+  - `shape` — rate-limit the flow (use with `bandwidth_limit_kbps`)
+</ParamField>
+
+<ParamField path="description" type="string">
+  An optional free-text description.
+</ParamField>
+
+<ParamField path="source_ip" type="string">
+  A source IP address or CIDR range to match (e.g., `192.168.10.0/24`).
+</ParamField>
+
+<ParamField path="destination_ip" type="string">
+  A destination IP address or CIDR range to match.
+</ParamField>
+
+<ParamField path="source_port" type="integer">
+  A source port to match (1–65535).
+</ParamField>
+
+<ParamField path="destination_port" type="integer">
+  A destination port to match (1–65535).
+</ParamField>
+
+<ParamField path="protocol" type="string">
+  Protocol to match. Accepted values: `tcp`, `udp`, `icmp`, `all`.
+</ParamField>
+
+<ParamField path="vlan_id" type="integer">
+  Match traffic originating from a specific VLAN (1–4094).
+</ParamField>
+
+<ParamField path="dscp_marking" type="integer">
+  The DSCP value to stamp on matching packets (0–63). Only used when `action` is `mark`. Common values: `46` (EF — voice/video), `34` (AF41 — video conferencing), `0` (best effort).
+</ParamField>
+
+<ParamField path="bandwidth_limit_kbps" type="integer">
+  The maximum allowed bandwidth in kilobits per second. Only used when `action` is `shape`.
+</ParamField>
+
+<ParamField path="priority" type="integer">
+  Rule evaluation order (1–1000). Lower numbers are evaluated first. Defaults to `100`.
+</ParamField>
+
+<ParamField path="enabled" type="boolean">
+  Whether the route is active immediately. Defaults to `true`.
+</ParamField>
+
+<ParamField path="confirm" type="boolean" required>
+  Must be `true` to create the route.
+</ParamField>
+
+<ParamField path="dry_run" type="boolean">
+  When `true`, validates the rule and returns the payload without creating it.
+</ParamField>
+
+<CodeGroup>
+```json Dry run
+{
+  "site_id": "default",
+  "name": "Mark Video Conferencing",
+  "action": "mark",
+  "dscp_marking": 34,
+  "destination_port": 3478,
+  "protocol": "udp",
+  "priority": 5,
+  "description": "DSCP AF41 for video conferencing UDP traffic",
+  "confirm": true,
+  "dry_run": true
+}
+```
+
+```json Create route
+{
+  "site_id": "default",
+  "name": "Mark Video Conferencing",
+  "action": "mark",
+  "dscp_marking": 34,
+  "destination_port": 3478,
+  "protocol": "udp",
+  "priority": 5,
+  "description": "DSCP AF41 for video conferencing UDP traffic",
+  "confirm": true
+}
+```
+</CodeGroup>
+
+---
+
+### `update_traffic_route`
+
+Updates an existing traffic routing policy. Only the fields you supply are changed. Match criteria (source/destination IP, port, protocol, VLAN) cannot be updated — delete and recreate the route if you need to change match conditions.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="route_id" type="string" required>
+  The ID of the route to update.
+</ParamField>
+
+<ParamField path="name" type="string">
+  New route name.
+</ParamField>
+
+<ParamField path="action" type="string">
+  New action (`allow`, `deny`, `mark`, or `shape`).
+</ParamField>
+
+<ParamField path="description" type="string">
+  New description.
+</ParamField>
+
+<ParamField path="enabled" type="boolean">
+  Enable or disable the route.
+</ParamField>
+
+<ParamField path="priority" type="integer">
+  New priority (1–1000).
+</ParamField>
+
+<ParamField path="confirm" type="boolean" required>
+  Must be `true` to apply the update.
+</ParamField>
+
+<ParamField path="dry_run" type="boolean">
+  Preview changes without applying them.
+</ParamField>
+
+---
+
+### `delete_traffic_route`
+
+Permanently deletes a traffic routing policy.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="route_id" type="string" required>
+  The ID of the route to delete.
+</ParamField>
+
+<ParamField path="confirm" type="boolean" required>
+  Must be `true` to delete the route.
+</ParamField>
+
+---
+
+## DSCP marking reference
+
+When using `action: mark`, the `dscp_marking` value determines how downstream switches and routers prioritize the packet. Common values used in network QoS:
+
+| DSCP value | Class | Typical use |
+|------------|-------|-------------|
+| `46` | Expedited Forwarding (EF) | VoIP, real-time audio |
+| `34` | Assured Forwarding 41 (AF41) | Video conferencing |
+| `26` | Assured Forwarding 31 (AF31) | Call signaling |
+| `18` | Assured Forwarding 21 (AF21) | Transactional data |
+| `10` | Assured Forwarding 11 (AF11) | Bulk data |
+| `0` | Best Effort (BE) | Default, no priority |
+
+<Tip>
+  DSCP marking is only effective when your upstream switches and ISP routers honour DSCP values. Check that your network equipment has QoS policies enabled before relying on marking.
+</Tip>
+
+---
+
+## Example: traffic shaping for a video conferencing setup
+
+This example creates two routes: one that marks video conferencing UDP traffic with a high-priority DSCP value, and one that rate-limits bulk file transfer traffic so it does not crowd out interactive sessions.
+
+```python
+# Route 1: Mark WebRTC/video conferencing UDP (Zoom, Teams, Google Meet)
+# port 3478 is the common STUN/TURN port used by video apps
+create_traffic_route(
+    site_id="default",
+    name="Mark Video Conferencing (UDP)",
+    action="mark",
+    dscp_marking=34,           # AF41 — video conferencing class
+    destination_port=3478,
+    protocol="udp",
+    priority=5,
+    description="High priority for real-time video/audio streams",
+    confirm=True
+)
+
+# Route 2: Shape backup/bulk traffic from the NAS subnet
+create_traffic_route(
+    site_id="default",
+    name="Shape NAS Backup Traffic",
+    action="shape",
+    bandwidth_limit_kbps=50000,    # 50 Mbps cap for bulk transfers
+    source_ip="192.168.50.0/24",   # NAS VLAN
+    priority=200,
+    description="Prevent backup jobs from saturating WAN",
+    confirm=True
+)
+
+# Verify routes are applied
+list_traffic_routes(site_id="default")
+```
+
+<Note>
+  Route priority is evaluated from lowest number to highest. A route with `priority=5` is checked before one with `priority=200`. Place your most specific or highest-priority rules at the lowest numbers.
+</Note>

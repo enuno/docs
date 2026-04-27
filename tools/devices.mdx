@@ -1,0 +1,311 @@
+---
+title: "Device query tools reference"
+description: "Reference for get_device_details, get_device_statistics, list_devices_by_type, search_devices, and list_pending_devices for querying UniFi devices."
+---
+
+The device query tools let you inspect every UniFi device on a site — access points, switches, gateways, and any device awaiting adoption. These tools are read-only and safe to call at any time. All of them accept a `site_id` to scope the request to a specific site; use `"default"` for single-site installations.
+
+## `list_devices_by_type`
+
+Returns all devices on a site that match a given device type string. This is the primary way to list devices filtered to a specific hardware category.
+
+```python
+result = await mcp.call_tool("list_devices_by_type", {
+    "site_id": "default",
+    "device_type": "uap"
+})
+```
+
+### Parameters
+
+<ParamField path="site_id" type="string" required>
+  The site identifier. Use `"default"` for single-site deployments or the site's internal ID for multi-site setups.
+</ParamField>
+
+<ParamField path="device_type" type="string" required>
+  Device type filter string. Matched against the `type` field and the `model` field. Common values:
+
+  - `uap` — UniFi access points
+  - `usw` — UniFi switches
+  - `ugw` — UniFi Security Gateways
+  - `udm` — UniFi Dream Machines
+  - `uxg` — UniFi Express Gateways
+</ParamField>
+
+<ParamField path="limit" type="number" default="100">
+  Maximum number of devices to return.
+</ParamField>
+
+<ParamField path="offset" type="number" default="0">
+  Number of devices to skip before returning results. Use with `limit` for pagination.
+</ParamField>
+
+### Response
+
+Returns an array of device objects.
+
+<Expandable title="Device object fields">
+  <ResponseField name="id" type="string">
+    Unique device identifier (`_id` from the UniFi API).
+  </ResponseField>
+  <ResponseField name="name" type="string">
+    Human-readable device name as set in UniFi Network.
+  </ResponseField>
+  <ResponseField name="model" type="string">
+    Device model code, for example `U6-LR` or `USW-Pro-24-POE`.
+  </ResponseField>
+  <ResponseField name="type" type="string">
+    Device category: `uap`, `usw`, `ugw`, `udm`, or `uxg`.
+  </ResponseField>
+  <ResponseField name="mac" type="string">
+    Device MAC address in colon-separated format.
+  </ResponseField>
+  <ResponseField name="ip" type="string">
+    Current IP address of the device.
+  </ResponseField>
+  <ResponseField name="state" type="number">
+    Connection state. `1` means the device is online; `0` means offline.
+  </ResponseField>
+  <ResponseField name="uptime" type="number">
+    Device uptime in seconds.
+  </ResponseField>
+  <ResponseField name="version" type="string">
+    Firmware version string.
+  </ResponseField>
+</Expandable>
+
+### Example response
+
+```json
+[
+  {
+    "id": "507f1f77bcf86cd799439011",
+    "name": "Living Room AP",
+    "model": "U6-LR",
+    "type": "uap",
+    "mac": "aa:bb:cc:dd:ee:ff",
+    "ip": "192.168.2.100",
+    "state": 1,
+    "uptime": 86400,
+    "version": "6.5.55.14277"
+  }
+]
+```
+
+---
+
+## `get_device_details`
+
+Returns the full configuration and status record for a single device identified by its ID.
+
+```python
+result = await mcp.call_tool("get_device_details", {
+    "site_id": "default",
+    "device_id": "507f1f77bcf86cd799439011"
+})
+```
+
+### Parameters
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="device_id" type="string" required>
+  The device's unique identifier (`_id` from the UniFi API). Use `list_devices_by_type` or `search_devices` to find a device's ID.
+</ParamField>
+
+### Response
+
+Returns a single device object with the same fields as `list_devices_by_type`, plus any additional fields present in the UniFi API response for that device.
+
+### Example response
+
+```json
+{
+  "id": "507f1f77bcf86cd799439011",
+  "name": "Living Room AP",
+  "model": "U6-LR",
+  "type": "uap",
+  "mac": "aa:bb:cc:dd:ee:ff",
+  "ip": "192.168.2.100",
+  "state": 1,
+  "uptime": 86400,
+  "version": "6.5.55.14277"
+}
+```
+
+<Info>
+  If the device ID is not found on the site, the tool raises `ResourceNotFoundError`. Make sure the `device_id` belongs to the same site as `site_id`.
+</Info>
+
+---
+
+## `get_device_statistics`
+
+Returns real-time performance statistics for a single device: CPU usage, memory usage, throughput counters, and uptime.
+
+```python
+result = await mcp.call_tool("get_device_statistics", {
+    "site_id": "default",
+    "device_id": "507f1f77bcf86cd799439011"
+})
+```
+
+### Parameters
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="device_id" type="string" required>
+  The device's unique identifier.
+</ParamField>
+
+### Response
+
+<ResponseField name="device_id" type="string">
+  The device identifier that was queried.
+</ResponseField>
+
+<ResponseField name="uptime" type="number">
+  Device uptime in seconds.
+</ResponseField>
+
+<ResponseField name="cpu" type="number">
+  CPU utilization percentage (0–100). May be `null` if not reported by the device.
+</ResponseField>
+
+<ResponseField name="mem" type="number">
+  Memory utilization percentage (0–100). May be `null` if not reported by the device.
+</ResponseField>
+
+<ResponseField name="tx_bytes" type="number">
+  Total bytes transmitted since last reset.
+</ResponseField>
+
+<ResponseField name="rx_bytes" type="number">
+  Total bytes received since last reset.
+</ResponseField>
+
+<ResponseField name="bytes" type="number">
+  Combined total bytes (`tx_bytes + rx_bytes`).
+</ResponseField>
+
+<ResponseField name="state" type="number">
+  Current connection state. `1` = online, `0` = offline.
+</ResponseField>
+
+<ResponseField name="uplink_depth" type="number">
+  Number of hops from the gateway. `0` indicates the device is directly connected to the gateway.
+</ResponseField>
+
+### Example response
+
+```json
+{
+  "device_id": "507f1f77bcf86cd799439011",
+  "uptime": 86400,
+  "cpu": 15,
+  "mem": 42,
+  "tx_bytes": 1024000000,
+  "rx_bytes": 2048000000,
+  "bytes": 3072000000,
+  "state": 1,
+  "uplink_depth": 0
+}
+```
+
+---
+
+## `search_devices`
+
+Searches all devices on a site by name, MAC address, IP address, or model string. The search is case-insensitive and matches partial strings.
+
+```python
+result = await mcp.call_tool("search_devices", {
+    "site_id": "default",
+    "query": "office"
+})
+```
+
+### Parameters
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="query" type="string" required>
+  The search string. Matched against device `name`, `mac`, `ip`, and `model` fields. Partial matches are returned.
+</ParamField>
+
+<ParamField path="limit" type="number" default="100">
+  Maximum number of results to return.
+</ParamField>
+
+<ParamField path="offset" type="number" default="0">
+  Number of results to skip for pagination.
+</ParamField>
+
+### Response
+
+Returns an array of device objects matching the query, in the same format as `list_devices_by_type`.
+
+<CodeGroup>
+
+```python Search by name
+result = await mcp.call_tool("search_devices", {
+    "site_id": "default",
+    "query": "office"
+})
+```
+
+```python Search by MAC
+result = await mcp.call_tool("search_devices", {
+    "site_id": "default",
+    "query": "aa:bb:cc"
+})
+```
+
+```python Search by model
+result = await mcp.call_tool("search_devices", {
+    "site_id": "default",
+    "query": "U6-LR"
+})
+```
+
+</CodeGroup>
+
+---
+
+## `list_pending_devices`
+
+Returns devices that are visible on the network but have not yet been adopted into the site. Use this to discover new hardware before calling `adopt_device`.
+
+```python
+result = await mcp.call_tool("list_pending_devices", {
+    "site_id": "default"
+})
+```
+
+### Parameters
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="limit" type="number" default="100">
+  Maximum number of pending devices to return.
+</ParamField>
+
+<ParamField path="offset" type="number" default="0">
+  Number of results to skip for pagination.
+</ParamField>
+
+### Response
+
+Returns an array of device objects for unadopted hardware. Fields are the same as other device tools, though some fields may be absent for devices that haven't been fully provisioned.
+
+<Tip>
+  After reviewing pending devices with this tool, you can adopt them using the `adopt_device` write tool. Remember to pass `confirm=True` when adopting.
+</Tip>

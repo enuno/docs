@@ -1,0 +1,122 @@
+---
+title: "Real-time events with UniFi webhooks"
+description: "Receive instant UniFi network event notifications—device status changes, client connections, and alerts—using HMAC-verified webhooks."
+---
+
+Webhooks let the UniFi MCP Server react to events on your network the moment they happen, rather than waiting for the next polling cycle. When a device goes offline, a client connects to your guest Wi-Fi, or an alert fires, UniFi pushes a signed HTTP request to your webhook endpoint and the server processes it immediately. This is useful for keeping cached data accurate, triggering automations, and building real-time monitoring workflows.
+
+## How webhook delivery works
+
+UniFi sends an HTTP `POST` request to your configured endpoint each time a network event occurs. The payload is a JSON object describing the event type, the affected site, a timestamp, and any relevant data. The server validates the request using an HMAC-SHA256 signature before passing the event to the appropriate handler.
+
+The webhook endpoint is registered at `/webhooks/unifi` by default.
+
+## Setting `WEBHOOK_SECRET`
+
+The `WEBHOOK_SECRET` environment variable controls signature verification. UniFi signs each outgoing webhook payload using HMAC-SHA256, and the server checks the `X-UniFi-Signature` header against a locally computed signature using your secret.
+
+```env
+# .env
+WEBHOOK_SECRET=your-webhook-secret-here
+```
+
+<Note>
+Always set `WEBHOOK_SECRET` in production. Without it, the server accepts webhook payloads from any source. An attacker could send forged events to manipulate cached state or trigger handlers. The secret must match the value you configure in your UniFi controller's webhook settings.
+</Note>
+
+## Event types
+
+The server includes built-in handlers for the following event categories:
+
+| Event type | Triggered when |
+|---|---|
+| `device.online` | A UniFi device (AP, switch, gateway) comes online |
+| `device.offline` | A UniFi device goes offline |
+| `client.connected` | A client connects to the network |
+| `client.disconnected` | A client disconnects from the network |
+| `alert.raised` | An alert is fired (configurable in UniFi) |
+| `event.occurred` | A generic network event occurs |
+
+Event types follow the format `category.action`. You can also register wildcard handlers using `category.*` to catch all events within a category.
+
+## Webhook payload structure
+
+Every incoming webhook payload follows this structure:
+
+```json
+{
+  "event_type": "device.offline",
+  "timestamp": "2026-04-22T14:30:00Z",
+  "site_id": "default",
+  "event_id": "evt_abc123def456",
+  "data": {
+    "mac": "aa:bb:cc:dd:ee:ff",
+    "name": "Office AP",
+    "ip": "192.168.2.10",
+    "model": "U6-LR"
+  }
+}
+```
+
+For client events, the `data` object includes fields such as `mac`, `hostname`, and `essid` (the SSID the client was connected to). For alert events, `data` includes `type`, `message`, and `severity`.
+
+## Setting up the webhook endpoint
+
+<Steps>
+  <Step title="Set your webhook secret">
+    Add `WEBHOOK_SECRET` to your `.env` file or environment. Choose a long, random string.
+
+    ```env
+    WEBHOOK_SECRET=a-long-random-secret-string-here
+    ```
+  </Step>
+  <Step title="Expose the endpoint">
+    The MCP server must be reachable from your UniFi controller. If you are running locally, use a tool like [ngrok](https://ngrok.com) to create a public tunnel:
+
+    ```bash
+    ngrok http 3000
+    ```
+
+    This gives you a public HTTPS URL such as `https://abc123.ngrok.io`.
+  </Step>
+  <Step title="Configure UniFi to send webhooks">
+    In your UniFi controller, navigate to **Settings → Notifications → Webhooks** and add your endpoint URL:
+
+    ```
+    https://your-server-or-tunnel/webhooks/unifi
+    ```
+
+    Enter the same secret string you set in `WEBHOOK_SECRET`.
+  </Step>
+  <Step title="Verify delivery">
+    Check your server logs for incoming events. A successful delivery looks like:
+
+    ```
+    INFO  Processing webhook event: device.online (site: default, id: evt_abc123)
+    INFO  Device came online: Office AP (aa:bb:cc:dd:ee:ff) in site default
+    ```
+  </Step>
+</Steps>
+
+## Signature verification details
+
+The server computes the expected signature as:
+
+```
+HMAC-SHA256(secret, raw_request_body)
+```
+
+The computed hex digest is compared to the value in the `X-UniFi-Signature` header using a constant-time comparison to prevent timing attacks. Requests with a missing or invalid signature are rejected with `401 Unauthorized`.
+
+## Automatic cache invalidation
+
+When a webhook event arrives, the built-in handlers automatically invalidate the relevant Redis cache entries. For example:
+
+- `device.online` and `device.offline` → invalidates the devices cache for that site
+- `client.connected` and `client.disconnected` → invalidates the clients cache for that site
+
+This ensures that subsequent tool calls return fresh data rather than stale cached values.
+
+## Rate limiting
+
+The webhook receiver limits incoming requests to 100 events per minute per site. Requests exceeding this threshold receive a `429 Too Many Requests` response. Duplicate events (identified by `event_id`) within a 5-minute window are silently discarded.

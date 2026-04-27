@@ -1,0 +1,51 @@
+---
+title: "UniFi MCP Server: AI-powered network management tool"
+description: "UniFi MCP Server lets AI assistants manage your UniFi network. Control devices, configure firewalls, and automate tasks through natural language."
+---
+
+UniFi MCP Server is an open-source server that implements the [Model Context Protocol](https://modelcontextprotocol.io) (MCP) — a standard that lets AI assistants use external tools and data sources. Once connected, your AI assistant can read and control your UniFi network infrastructure directly, using the official UniFi API.
+
+MCP works like a bridge: your AI assistant sends requests to the MCP server, which translates them into UniFi API calls and returns the results. You interact entirely through natural language — no scripting or API knowledge required.
+
+## Who it's for
+
+UniFi MCP Server is built for anyone who manages a UniFi network and wants to use an AI assistant to speed up routine tasks. Whether you're a home lab enthusiast, a network engineer, or an IT administrator managing multiple sites, the server lets you interact with your network the way you'd have a conversation.
+
+## Key features
+
+<CardGroup cols={2}>
+  <Card title="77 MCP tools" icon="wrench">
+    A comprehensive set of tools covering devices, clients, networks, firewall rules, WiFi SSIDs, VLANs, QoS, backups, and more.
+  </Card>
+  <Card title="Full read and write access" icon="pen-to-square">
+    In Local Gateway mode, your AI assistant can create, update, and delete network configuration — not just read it.
+  </Card>
+  <Card title="Safety by design" icon="shield-check">
+    All mutating operations require explicit confirmation. A dry-run mode lets you preview changes before applying them. Every action is logged to an audit file.
+  </Card>
+  <Card title="Multi-site support" icon="building">
+    Manage multiple UniFi sites from a single server, with cross-site analytics and site health monitoring.
+  </Card>
+  <Card title="Works with any MCP client" icon="plug">
+    Compatible with Claude Desktop, Cursor, and any other MCP-compatible AI assistant.
+  </Card>
+  <Card title="Easy installation" icon="box">
+    Install with a single `pip install` command, or run via Docker. No build tools needed.
+  </Card>
+</CardGroup>
+
+## Three API modes
+
+UniFi MCP Server supports three ways to connect to your UniFi infrastructure. The right choice depends on what you need to do:
+
+- **Local Gateway** — Direct access to your UniFi gateway over your local network. All 77 tools are available, including full read and write access to devices, networks, and firewall rules. This is the recommended mode for most users.
+- **Cloud v1** — Connects to the official stable UniFi cloud API. Limited to read-only site statistics. Rate limit: 10,000 requests per minute.
+- **Cloud EA** — Connects to the Early Access cloud API. Limited to read-only site statistics. Rate limit: 100 requests per minute.
+
+See [API modes](/api-modes) for a full comparison and configuration instructions.
+
+## Get started
+
+<Card title="Quickstart" icon="rocket" href="/quickstart">
+  Install the server and connect it to your AI assistant in five steps.
+</Card>

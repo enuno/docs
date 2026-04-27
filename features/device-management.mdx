@@ -1,0 +1,252 @@
+---
+title: "Monitor and control UniFi devices with AI"
+description: "List, inspect, restart, locate, and upgrade UniFi access points, switches, and gateways through natural language prompts using the UniFi MCP Server."
+---
+
+The UniFi MCP Server gives your AI assistant full visibility into every device on your network—access points, switches, and gateways—and the ability to control them through plain English. You can ask your AI to show you which devices are offline, restart a misbehaving access point, or flash an LED to locate a device on the shelf, without opening the UniFi console.
+
+## What you can do
+
+<CardGroup cols={2}>
+  <Card title="List and inspect devices" icon="list">
+    Query all devices on a site, filter by type, or search by name, MAC address, or IP.
+  </Card>
+  <Card title="Real-time statistics" icon="chart-bar">
+    Pull live CPU, memory, uptime, and bandwidth stats for any device.
+  </Card>
+  <Card title="Device control" icon="power-off">
+    Restart devices, flash locator LEDs, and trigger firmware upgrades.
+  </Card>
+  <Card title="Client management" icon="users">
+    Block, unblock, and reconnect clients directly from your AI assistant.
+  </Card>
+</CardGroup>
+
+## Listing and finding devices
+
+You can list all devices on a site, filter by device type, or search by name, MAC, or IP address.
+
+**Example prompts:**
+
+- "Show me all offline devices"
+- "List all access points on the main site"
+- "Find the device with IP 192.168.2.50"
+- "Which switches are in the network?"
+
+**Tools used:** `list_devices_by_type`, `search_devices`, `get_device_details`
+
+<Tabs>
+  <Tab title="List by type">
+    ```python
+    # List all access points
+    result = await mcp.call_tool("list_devices_by_type", {
+        "site_id": "default",
+        "device_type": "uap"
+    })
+    ```
+
+    **Response:**
+    ```json
+    [
+      {
+        "id": "507f1f77bcf86cd799439011",
+        "name": "Lobby AP",
+        "model": "U6-LR",
+        "type": "uap",
+        "mac": "aa:bb:cc:dd:ee:ff",
+        "ip": "192.168.2.100",
+        "state": 1,
+        "uptime": 86400,
+        "version": "6.5.55.14277"
+      }
+    ]
+    ```
+  </Tab>
+  <Tab title="Search devices">
+    ```python
+    # Search by name, MAC, or IP
+    result = await mcp.call_tool("search_devices", {
+        "site_id": "default",
+        "query": "lobby"
+    })
+    ```
+  </Tab>
+  <Tab title="Get device details">
+    ```python
+    result = await mcp.call_tool("get_device_details", {
+        "site_id": "default",
+        "device_id": "507f1f77bcf86cd799439011"
+    })
+    ```
+  </Tab>
+</Tabs>
+
+### Device type codes
+
+| Code | Device type |
+|------|-------------|
+| `uap` | Access point |
+| `usw` | Switch |
+| `ugw` | Gateway |
+| `udm` | UniFi Dream Machine |
+| `uxg` | Next-gen gateway |
+
+## Real-time device statistics
+
+The `get_device_statistics` tool returns live data for any device.
+
+**Example prompt:** "What is the CPU and memory usage on the conference room AP?"
+
+```python
+result = await mcp.call_tool("get_device_statistics", {
+    "site_id": "default",
+    "device_id": "507f1f77bcf86cd799439011"
+})
+```
+
+**Response:**
+```json
+{
+  "device_id": "507f1f77bcf86cd799439011",
+  "uptime": 86400,
+  "cpu": 15,
+  "mem": 42,
+  "tx_bytes": 1024000000,
+  "rx_bytes": 2048000000,
+  "state": 1,
+  "uplink_depth": 0
+}
+```
+
+<Tip>
+`uplink_depth` of `0` means the device is directly connected to the gateway. Higher values indicate the device is further down the network tree.
+</Tip>
+
+## Controlling devices
+
+All device control operations are mutating—they change the state of your hardware. For safety, every mutating tool requires you to pass `confirm=True`. You can also pass `dry_run=True` to preview what would happen without making any changes.
+
+<Warning>
+Mutating operations such as restart, locate, and firmware upgrade require `confirm=True`. Omitting this flag causes the tool to return an error. All operations are recorded in `audit.log`.
+</Warning>
+
+### Restart a device
+
+**Example prompts:**
+
+- "Restart the access point in the lobby"
+- "Reboot the switch in server room 2"
+
+```python
+# Preview first
+preview = await mcp.call_tool("restart_device", {
+    "site_id": "default",
+    "device_mac": "aa:bb:cc:dd:ee:ff",
+    "dry_run": True
+})
+
+# Execute
+result = await mcp.call_tool("restart_device", {
+    "site_id": "default",
+    "device_mac": "aa:bb:cc:dd:ee:ff",
+    "confirm": True
+})
+```
+
+### Locate a device (LED blink)
+
+The locate tool flashes the LED on a physical device so you can find it in a rack or ceiling.
+
+**Example prompt:** "Flash the LED on the access point named 'Warehouse-AP-3' so I can find it"
+
+```python
+result = await mcp.call_tool("locate_device", {
+    "site_id": "default",
+    "device_mac": "aa:bb:cc:dd:ee:ff",
+    "enabled": True,
+    "confirm": True
+})
+```
+
+Pass `"enabled": False` to turn the locator off again.
+
+### Upgrade firmware
+
+**Example prompt:** "Upgrade the firmware on the gateway"
+
+```python
+result = await mcp.call_tool("upgrade_device", {
+    "site_id": "default",
+    "device_mac": "aa:bb:cc:dd:ee:ff",
+    "confirm": True
+})
+```
+
+<Note>
+Firmware upgrades cause a brief device restart. Connected clients will temporarily lose connectivity during the upgrade, which typically takes 2–5 minutes.
+</Note>
+
+## Client management
+
+You can block, unblock, and reconnect individual clients on the network through your AI assistant. These operations also require `confirm=True`.
+
+**Example prompts:**
+
+- "Block the device with MAC aa:bb:cc:dd:ee:01 from the network"
+- "Reconnect John's laptop"
+- "Unblock the IoT sensor I blocked yesterday"
+
+<Steps>
+  <Step title="Find the client">
+    ```python
+    result = await mcp.call_tool("search_clients", {
+        "site_id": "default",
+        "query": "johns-laptop"
+    })
+    ```
+  </Step>
+  <Step title="Block the client">
+    ```python
+    result = await mcp.call_tool("block_client", {
+        "site_id": "default",
+        "client_mac": "aa:bb:cc:dd:ee:01",
+        "confirm": True
+    })
+    ```
+  </Step>
+  <Step title="Unblock when ready">
+    ```python
+    result = await mcp.call_tool("unblock_client", {
+        "site_id": "default",
+        "client_mac": "aa:bb:cc:dd:ee:01",
+        "confirm": True
+    })
+    ```
+  </Step>
+</Steps>
+
+### Force client reconnect
+
+Use `reconnect_client` when a client is stuck or has a stale IP lease.
+
+```python
+result = await mcp.call_tool("reconnect_client", {
+    "site_id": "default",
+    "client_mac": "aa:bb:cc:dd:ee:01",
+    "confirm": True
+})
+```
+
+## Safety mechanisms
+
+Every tool that changes device or client state includes built-in safeguards:
+
+| Mechanism | How to use |
+|-----------|-----------|
+| Confirmation | Pass `confirm=True` to execute any mutating operation |
+| Dry run | Pass `dry_run=True` to preview changes without applying them |
+| Audit log | All operations are automatically written to `audit.log` |
+
+<Tip>
+When in doubt, always run with `dry_run=True` first. The AI assistant will show you exactly what would happen before any changes are made.
+</Tip>

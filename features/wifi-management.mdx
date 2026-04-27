@@ -1,0 +1,312 @@
+---
+title: "Create and configure WiFi networks (SSIDs)"
+description: "Create WPA2/WPA3 WiFi networks, set up guest SSIDs with VLAN isolation, and monitor connected client counts and bandwidth usage through your AI assistant."
+---
+
+The UniFi MCP Server lets your AI assistant manage every WiFi network (SSID) on your site—from creating a secure WPA3 corporate network to spinning up a guest hotspot with VLAN isolation. You can update passwords, enable or disable SSIDs, and pull live statistics on connected clients and bandwidth, all through natural language.
+
+## What you can do
+
+<CardGroup cols={2}>
+  <Card title="Create SSIDs" icon="wifi">
+    Add new wireless networks with WPA2 or WPA3 security in seconds.
+  </Card>
+  <Card title="Guest networks" icon="users">
+    Create isolated guest networks with VLAN segmentation and guest-mode flagging.
+  </Card>
+  <Card title="Update and delete" icon="pencil">
+    Change passwords, security modes, VLAN IDs, or disable SSIDs on the fly.
+  </Card>
+  <Card title="WiFi statistics" icon="chart-bar">
+    See client counts and bandwidth usage per SSID in real time.
+  </Card>
+</CardGroup>
+
+## Listing WiFi networks
+
+**Example prompts:**
+
+- "Show all WiFi networks on this site"
+- "Which SSIDs are enabled?"
+- "What security mode is the corporate WiFi using?"
+
+```python
+result = await mcp.call_tool("list_wlans", {
+    "site_id": "default"
+})
+```
+
+**Response:**
+```json
+[
+  {
+    "_id": "507f1f77bcf86cd799439011",
+    "name": "Corporate-WiFi",
+    "security": "wpapsk",
+    "enabled": true,
+    "is_guest": false,
+    "wpa_mode": "wpa3",
+    "wpa_enc": "ccmp",
+    "vlan": null,
+    "hide_ssid": false
+  },
+  {
+    "_id": "507f1f77bcf86cd799439012",
+    "name": "Guest",
+    "security": "wpapsk",
+    "enabled": true,
+    "is_guest": true,
+    "wpa_mode": "wpa2",
+    "wpa_enc": "ccmp",
+    "vlan": 100,
+    "hide_ssid": false
+  }
+]
+```
+
+## Creating a WiFi network
+
+The `create_wlan` tool creates a new SSID on your site. All creation operations require `confirm=True`. Use `dry_run=True` to preview the configuration before applying it.
+
+<Warning>
+Creating, modifying, or deleting WiFi networks requires `confirm=True`. Passwords are automatically masked in audit logs—they are never stored in plain text.
+</Warning>
+
+### Create a corporate WPA3 network
+
+**Example prompt:** "Create a new WiFi network called 'Staff' with WPA3 security"
+
+```python
+result = await mcp.call_tool("create_wlan", {
+    "site_id": "default",
+    "name": "Staff",
+    "security": "wpapsk",
+    "password": "StrongPassword123!",
+    "wpa_mode": "wpa3",
+    "wpa_enc": "ccmp",
+    "is_guest": False,
+    "confirm": True
+})
+```
+
+### Create a guest WiFi with VLAN isolation
+
+Guest networks keep visitor traffic isolated from your corporate LAN. Setting `is_guest=True` enables UniFi's guest policies, and `vlan_id` assigns the traffic to a dedicated VLAN.
+
+**Example prompt:** "Create a guest WiFi on VLAN 100 with a simple password"
+
+<Steps>
+  <Step title="Preview the configuration">
+    ```python
+    preview = await mcp.call_tool("create_wlan", {
+        "site_id": "default",
+        "name": "Guest WiFi",
+        "security": "wpapsk",
+        "password": "Welcome123",
+        "is_guest": True,
+        "vlan_id": 100,
+        "wpa_mode": "wpa2",
+        "dry_run": True
+    })
+    ```
+
+    **Response:**
+    ```json
+    {
+      "dry_run": true,
+      "would_create": {
+        "name": "Guest WiFi",
+        "security": "wpapsk",
+        "is_guest": true,
+        "vlan": 100,
+        "vlan_enabled": true,
+        "wpa_mode": "wpa2",
+        "wpa_enc": "ccmp",
+        "enabled": true,
+        "hide_ssid": false
+      }
+    }
+    ```
+  </Step>
+  <Step title="Create the network">
+    ```python
+    result = await mcp.call_tool("create_wlan", {
+        "site_id": "default",
+        "name": "Guest WiFi",
+        "security": "wpapsk",
+        "password": "Welcome123",
+        "is_guest": True,
+        "vlan_id": 100,
+        "wpa_mode": "wpa2",
+        "confirm": True
+    })
+    ```
+  </Step>
+</Steps>
+
+### WLAN creation parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `name` | string | — | SSID name (broadcasted network name) |
+| `security` | string | — | `open`, `wpapsk`, or `wpaeap` |
+| `password` | string | — | Required for `wpapsk` security |
+| `wpa_mode` | string | `wpa2` | `wpa`, `wpa2`, or `wpa3` |
+| `wpa_enc` | string | `ccmp` | `tkip`, `ccmp`, or `ccmp-tkip` |
+| `is_guest` | boolean | `false` | Enable guest network policies |
+| `vlan_id` | integer | — | VLAN ID for isolation (1–4094) |
+| `hide_ssid` | boolean | `false` | Hide SSID from broadcast list |
+| `enabled` | boolean | `true` | Enable SSID immediately |
+| `confirm` | boolean | — | Required: must be `true` to execute |
+| `dry_run` | boolean | — | Preview without applying |
+
+### WPA mode comparison
+
+| Mode | Security level | Recommended for |
+|------|---------------|-----------------|
+| `wpa` | Basic | Legacy devices only |
+| `wpa2` | Good | General use, broad compatibility |
+| `wpa3` | Best | Modern devices, highest security |
+
+<Tip>
+Use `wpa3` for corporate networks where all devices support it. Use `wpa2` for guest networks to maximize compatibility with visitor devices.
+</Tip>
+
+## Updating a WiFi network
+
+Use `update_wlan` to change the password, security mode, VLAN, or enable/disable an SSID.
+
+**Example prompts:**
+
+- "Change the guest WiFi password to 'NewPass456'"
+- "Disable the 'Testing' SSID"
+- "Move the IoT WiFi to VLAN 30"
+
+```python
+result = await mcp.call_tool("update_wlan", {
+    "site_id": "default",
+    "wlan_id": "507f1f77bcf86cd799439012",
+    "password": "NewPass456",
+    "confirm": True
+})
+```
+
+You can update any combination of fields in a single call:
+
+```python
+result = await mcp.call_tool("update_wlan", {
+    "site_id": "default",
+    "wlan_id": "507f1f77bcf86cd799439012",
+    "enabled": False,
+    "hide_ssid": True,
+    "confirm": True
+})
+```
+
+## Deleting a WiFi network
+
+**Example prompt:** "Delete the old 'Temp-WiFi' network"
+
+```python
+# Preview first
+preview = await mcp.call_tool("delete_wlan", {
+    "site_id": "default",
+    "wlan_id": "507f1f77bcf86cd799439013",
+    "dry_run": True
+})
+
+# Execute
+result = await mcp.call_tool("delete_wlan", {
+    "site_id": "default",
+    "wlan_id": "507f1f77bcf86cd799439013",
+    "confirm": True
+})
+```
+
+## WiFi statistics
+
+The `get_wlan_statistics` tool returns connected client counts and total bandwidth usage for each SSID on your site.
+
+**Example prompts:**
+
+- "How many clients are connected to the guest WiFi?"
+- "What's the bandwidth usage on each SSID?"
+
+```python
+result = await mcp.call_tool("get_wlan_statistics", {
+    "site_id": "default"
+})
+```
+
+**Response:**
+```json
+{
+  "site_id": "default",
+  "wlans": [
+    {
+      "wlan_id": "507f1f77bcf86cd799439011",
+      "name": "Corporate-WiFi",
+      "enabled": true,
+      "security": "wpapsk",
+      "is_guest": false,
+      "client_count": 24,
+      "total_tx_bytes": 10240000000,
+      "total_rx_bytes": 20480000000,
+      "total_bytes": 30720000000
+    },
+    {
+      "wlan_id": "507f1f77bcf86cd799439012",
+      "name": "Guest WiFi",
+      "enabled": true,
+      "security": "wpapsk",
+      "is_guest": true,
+      "client_count": 8,
+      "total_tx_bytes": 512000000,
+      "total_rx_bytes": 1024000000,
+      "total_bytes": 1536000000
+    }
+  ]
+}
+```
+
+To get statistics for a single SSID, pass the optional `wlan_id` parameter:
+
+```python
+result = await mcp.call_tool("get_wlan_statistics", {
+    "site_id": "default",
+    "wlan_id": "507f1f77bcf86cd799439012"
+})
+```
+
+## Advanced SSID options
+
+When creating an SSID, you can also configure:
+
+- **AP group targeting** — Broadcast an SSID on a specific subset of access points using `ap_group_ids` and `ap_group_mode`.
+- **Band selection** — Restrict an SSID to 2.4 GHz or 5 GHz using `wlan_bands: ["2g"]` or `["5g"]`.
+- **IoT optimization** — Enable IoT-friendly settings with `optimize_iot_wifi_connectivity: True`.
+- **Minimum data rate** — Set a minimum 2.4 GHz data rate with `minrate_ng_enabled` and `minrate_ng_data_rate_kbps`.
+
+```python
+# IoT-optimized SSID on 2.4 GHz only
+result = await mcp.call_tool("create_wlan", {
+    "site_id": "default",
+    "name": "IoT-Devices",
+    "security": "wpapsk",
+    "password": "IoTPass2024!",
+    "wlan_bands": ["2g"],
+    "optimize_iot_wifi_connectivity": True,
+    "vlan_id": 20,
+    "confirm": True
+})
+```
+
+## Safety summary
+
+| Operation | Requires `confirm=True` | Supports `dry_run=True` |
+|-----------|------------------------|------------------------|
+| List SSIDs | No | No |
+| Get statistics | No | No |
+| Create SSID | Yes | Yes |
+| Update SSID | Yes | Yes |
+| Delete SSID | Yes | Yes |

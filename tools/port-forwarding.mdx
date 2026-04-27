@@ -1,0 +1,218 @@
+---
+title: "Port forwarding tools reference"
+description: "Reference for UniFi MCP tools that list, create, update, and delete port forwarding rules to expose internal services through your WAN interface."
+---
+
+The port forwarding tools let you manage NAT rules that map inbound traffic on a WAN port to an internal IP address and port. You can read the current ruleset without any confirmation and use the write tools to expose services, modify existing rules, or remove port forwards that are no longer needed. Each rule maps a single external port (or port range) to a specific internal destination.
+
+<Warning>
+  `create_port_forward`, `update_port_forward`, and `delete_port_forward` all require `confirm=True`. Opening ports on your WAN interface increases your attack surface. Always use `dry_run=True` to review the rule before applying it, and restrict the `src` field to specific IP ranges when possible.
+</Warning>
+
+## Tools
+
+### `list_port_forwards`
+
+Returns all port forwarding rules configured in the site. This is a read-only operation.
+
+<ParamField body="site_id" type="string" required>
+  The site identifier to query.
+</ParamField>
+
+<ParamField body="limit" type="integer">
+  Maximum number of rules to return.
+</ParamField>
+
+<ParamField body="offset" type="integer">
+  Number of rules to skip, for pagination.
+</ParamField>
+
+```python
+rules = await mcp.call_tool("list_port_forwards", {
+    "site_id": "default",
+})
+```
+
+---
+
+### `create_port_forward`
+
+Creates a new port forwarding rule. The external WAN port (`dst_port`) is mapped to an internal IP and port (`fwd_ip` and `fwd_port`). Both the destination port and the forward-to IP are validated before the rule is submitted.
+
+<ParamField body="site_id" type="string" required>
+  The site identifier where the rule will be created.
+</ParamField>
+
+<ParamField body="name" type="string" required>
+  A descriptive label for the rule (e.g. `"Home Assistant"`).
+</ParamField>
+
+<ParamField body="dst_port" type="integer" required>
+  The external (WAN) port to listen on. Must be a valid port number (1–65535).
+</ParamField>
+
+<ParamField body="fwd_ip" type="string" required>
+  The internal (LAN) IP address to forward matching traffic to. Must be a valid IPv4 address.
+</ParamField>
+
+<ParamField body="fwd_port" type="integer" required>
+  The internal port on `fwd_ip` to forward to. Must be a valid port number (1–65535).
+</ParamField>
+
+<ParamField body="protocol" type="string">
+  The protocol to match. Accepted values: `tcp`, `udp`, `tcp_udp`. Defaults to `tcp_udp`.
+</ParamField>
+
+<ParamField body="src" type="string">
+  Restricts the rule to traffic from a specific IP address or CIDR block. Use `"any"` (the default) to allow traffic from all sources.
+</ParamField>
+
+<ParamField body="enabled" type="boolean">
+  Whether the rule is active immediately after creation. Defaults to `true`.
+</ParamField>
+
+<ParamField body="log" type="boolean">
+  Write matched traffic to the firewall log. Defaults to `false`.
+</ParamField>
+
+<ParamField body="confirm" type="boolean" required>
+  Must be `true` to create the rule.
+</ParamField>
+
+<ParamField body="dry_run" type="boolean">
+  When `true`, validates all parameters and returns the rule payload without creating anything.
+</ParamField>
+
+**Example: forwarding external port 8080 to an internal web server**
+
+<CodeGroup>
+
+```python dry run
+result = await mcp.call_tool("create_port_forward", {
+    "site_id": "default",
+    "name": "Web Server",
+    "dst_port": 8080,
+    "fwd_ip": "192.168.2.100",
+    "fwd_port": 80,
+    "protocol": "tcp",
+    "dry_run": True,
+    "confirm": True,
+})
+# {"dry_run": true, "would_create": {"name": "Web Server", "dst_port": "8080", ...}}
+```
+
+```python execute
+result = await mcp.call_tool("create_port_forward", {
+    "site_id": "default",
+    "name": "Web Server",
+    "dst_port": 8080,
+    "fwd_ip": "192.168.2.100",
+    "fwd_port": 80,
+    "protocol": "tcp",
+    "confirm": True,
+})
+```
+
+</CodeGroup>
+
+<Tip>
+  If you only need a specific external IP to access the forwarded port (for example, a remote office or your own IP), supply that address or CIDR in the `src` parameter. This limits exposure without needing a separate firewall rule.
+</Tip>
+
+---
+
+### `update_port_forward`
+
+Modifies an existing port forwarding rule using a fetch-then-merge strategy. Only the fields you provide are changed; all other settings are preserved.
+
+<ParamField body="site_id" type="string" required>
+  The site identifier where the rule lives.
+</ParamField>
+
+<ParamField body="rule_id" type="string" required>
+  The internal ID of the rule to update. Use `list_port_forwards` to find this value.
+</ParamField>
+
+<ParamField body="name" type="string">
+  New rule name.
+</ParamField>
+
+<ParamField body="dst_port" type="integer">
+  New external (WAN) port.
+</ParamField>
+
+<ParamField body="fwd_ip" type="string">
+  New internal destination IP address.
+</ParamField>
+
+<ParamField body="fwd_port" type="integer">
+  New internal destination port.
+</ParamField>
+
+<ParamField body="protocol" type="string">
+  New protocol: `tcp`, `udp`, or `tcp_udp`.
+</ParamField>
+
+<ParamField body="src" type="string">
+  New source restriction. Use `"any"` to remove a previous restriction.
+</ParamField>
+
+<ParamField body="enabled" type="boolean">
+  Enable or disable the rule without deleting it.
+</ParamField>
+
+<ParamField body="log" type="boolean">
+  Enable or disable logging for the rule.
+</ParamField>
+
+<ParamField body="confirm" type="boolean" required>
+  Must be `true` to apply changes.
+</ParamField>
+
+<ParamField body="dry_run" type="boolean">
+  When `true`, returns a preview without writing changes.
+</ParamField>
+
+```python
+result = await mcp.call_tool("update_port_forward", {
+    "site_id": "default",
+    "rule_id": "507f1f77bcf86cd799439011",
+    "enabled": False,
+    "confirm": True,
+})
+```
+
+---
+
+### `delete_port_forward`
+
+Permanently removes a port forwarding rule. The tool verifies the rule exists before deleting it and raises `ResourceNotFoundError` if the ID cannot be found.
+
+<ParamField body="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField body="rule_id" type="string" required>
+  The internal ID of the port forwarding rule to delete.
+</ParamField>
+
+<ParamField body="confirm" type="boolean" required>
+  Must be `true` to delete the rule.
+</ParamField>
+
+<ParamField body="dry_run" type="boolean">
+  When `true`, confirms the rule exists and returns a preview without deleting.
+</ParamField>
+
+```python
+result = await mcp.call_tool("delete_port_forward", {
+    "site_id": "default",
+    "rule_id": "507f1f77bcf86cd799439011",
+    "confirm": True,
+})
+# {"success": true, "deleted_rule_id": "507f1f77bcf86cd799439011"}
+```
+
+<Note>
+  If you want to temporarily suspend a port forward without losing the configuration, use `update_port_forward` with `enabled=false` instead of deleting the rule.
+</Note>

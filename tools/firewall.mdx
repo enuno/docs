@@ -1,0 +1,258 @@
+---
+title: "Firewall rule tools reference"
+description: "Reference for UniFi MCP tools that list, create, update, and delete traditional firewall rules, including protocol, port, and address matching."
+---
+
+The firewall tools give you full lifecycle management of UniFi firewall rules on a per-site basis. You can read the current ruleset without any confirmation, and use the write tools to add, modify, or remove rules. The create tool exposes the complete set of matching options available in the UniFi API — including connection state tracking and network-to-network (inter-VLAN) matching — so you can express precisely the traffic policy you need.
+
+<Warning>
+  `create_firewall_rule`, `update_firewall_rule`, and `delete_firewall_rule` all require `confirm=True` to execute. An incorrect firewall rule can disrupt network connectivity across your site. Always use `dry_run=True` to preview the rule payload before committing.
+</Warning>
+
+## Tools
+
+### `list_firewall_rules`
+
+Returns all firewall rules configured in the site. This is a read-only operation and requires no confirmation.
+
+<ParamField body="site_id" type="string" required>
+  The site identifier to query.
+</ParamField>
+
+<ParamField body="limit" type="integer">
+  Maximum number of rules to return in a single response.
+</ParamField>
+
+<ParamField body="offset" type="integer">
+  Number of rules to skip before returning results, for pagination.
+</ParamField>
+
+```python
+rules = await mcp.call_tool("list_firewall_rules", {
+    "site_id": "default",
+})
+```
+
+---
+
+### `create_firewall_rule`
+
+Creates a new firewall rule in the specified ruleset. You must provide a name and an action. All other parameters are optional and let you narrow the traffic the rule matches.
+
+<ParamField body="site_id" type="string" required>
+  The site identifier where the rule will be created.
+</ParamField>
+
+<ParamField body="name" type="string" required>
+  A descriptive name for the rule (e.g. `"Block Telnet from IoT"`).
+</ParamField>
+
+<ParamField body="action" type="string" required>
+  What to do when traffic matches the rule. Accepted values: `accept`, `drop`, `reject`.
+</ParamField>
+
+<ParamField body="ruleset" type="string">
+  The firewall chain to add this rule to. Common values: `WAN_IN`, `WAN_OUT`, `LAN_IN`, `LAN_OUT`, `LAN_LOCAL`, `GUEST_IN`, `GUEST_OUT`. Defaults to `WAN_IN`.
+</ParamField>
+
+<ParamField body="rule_index" type="integer">
+  Position in the firewall chain. Lower numbers are evaluated first. Rules are not automatically renumbered when you insert a new one. Defaults to `2000`.
+</ParamField>
+
+<ParamField body="src_address" type="string">
+  Source IP address or CIDR block to match (e.g. `"192.168.10.0/24"`).
+</ParamField>
+
+<ParamField body="dst_address" type="string">
+  Destination IP address or CIDR block to match.
+</ParamField>
+
+<ParamField body="protocol" type="string">
+  Protocol to match. Accepted values: `tcp`, `udp`, `icmp`, `all`.
+</ParamField>
+
+<ParamField body="port" type="integer">
+  Destination port number to match. Only meaningful when `protocol` is `tcp` or `udp`.
+</ParamField>
+
+<ParamField body="src_networkconf_id" type="string">
+  Source network configuration ID. Use this instead of `src_address` to match traffic from a specific VLAN or network object. Obtain the ID from `get_network_details`.
+</ParamField>
+
+<ParamField body="src_networkconf_type" type="string">
+  Source network type. Defaults to `NETv4`.
+</ParamField>
+
+<ParamField body="dst_networkconf_id" type="string">
+  Destination network configuration ID, for inter-VLAN rules.
+</ParamField>
+
+<ParamField body="dst_networkconf_type" type="string">
+  Destination network type. Defaults to `NETv4`.
+</ParamField>
+
+<ParamField body="state_established" type="boolean">
+  Match traffic that is part of an already-established connection. Defaults to `false`.
+</ParamField>
+
+<ParamField body="state_related" type="boolean">
+  Match traffic related to an established connection (e.g. FTP data channel). Defaults to `false`.
+</ParamField>
+
+<ParamField body="state_new" type="boolean">
+  Match new connection attempts. Defaults to `false`.
+</ParamField>
+
+<ParamField body="state_invalid" type="boolean">
+  Match packets that cannot be identified as belonging to a known connection. Defaults to `false`.
+</ParamField>
+
+<ParamField body="logging" type="boolean">
+  Write matching traffic to the firewall log. Defaults to `false`.
+</ParamField>
+
+<ParamField body="enabled" type="boolean">
+  Whether the rule is active immediately after creation. Defaults to `true`.
+</ParamField>
+
+<ParamField body="confirm" type="boolean" required>
+  Must be `true` to create the rule.
+</ParamField>
+
+<ParamField body="dry_run" type="boolean">
+  When `true`, validates all parameters and returns the rule payload that would be submitted, without creating anything.
+</ParamField>
+
+**Example: blocking inbound SSH from the WAN**
+
+<CodeGroup>
+
+```python dry run
+result = await mcp.call_tool("create_firewall_rule", {
+    "site_id": "default",
+    "name": "Block inbound SSH",
+    "action": "drop",
+    "ruleset": "WAN_IN",
+    "rule_index": 2001,
+    "protocol": "tcp",
+    "port": 22,
+    "logging": True,
+    "dry_run": True,
+    "confirm": True,
+})
+# {"dry_run": true, "would_create": {...}}
+```
+
+```python execute
+result = await mcp.call_tool("create_firewall_rule", {
+    "site_id": "default",
+    "name": "Block inbound SSH",
+    "action": "drop",
+    "ruleset": "WAN_IN",
+    "rule_index": 2001,
+    "protocol": "tcp",
+    "port": 22,
+    "logging": True,
+    "confirm": True,
+})
+```
+
+</CodeGroup>
+
+<Tip>
+  To block inter-VLAN traffic between two specific networks, supply `src_networkconf_id` and `dst_networkconf_id` with `ruleset` set to `LAN_IN`. This is more reliable than matching on IP ranges that may change.
+</Tip>
+
+---
+
+### `update_firewall_rule`
+
+Modifies an existing firewall rule using a fetch-then-merge approach. Only the fields you pass are changed; the rest of the rule is left exactly as it is.
+
+<ParamField body="site_id" type="string" required>
+  The site identifier where the rule lives.
+</ParamField>
+
+<ParamField body="rule_id" type="string" required>
+  The internal ID of the rule to update. Use `list_firewall_rules` to find this value.
+</ParamField>
+
+<ParamField body="name" type="string">
+  New rule name.
+</ParamField>
+
+<ParamField body="action" type="string">
+  New action: `accept`, `drop`, or `reject`.
+</ParamField>
+
+<ParamField body="src_address" type="string">
+  New source IP or CIDR.
+</ParamField>
+
+<ParamField body="dst_address" type="string">
+  New destination IP or CIDR.
+</ParamField>
+
+<ParamField body="protocol" type="string">
+  New protocol: `tcp`, `udp`, `icmp`, or `all`.
+</ParamField>
+
+<ParamField body="port" type="integer">
+  New destination port.
+</ParamField>
+
+<ParamField body="enabled" type="boolean">
+  Enable or disable the rule without deleting it.
+</ParamField>
+
+<ParamField body="confirm" type="boolean" required>
+  Must be `true` to apply changes.
+</ParamField>
+
+<ParamField body="dry_run" type="boolean">
+  When `true`, returns a preview without writing changes.
+</ParamField>
+
+```python
+result = await mcp.call_tool("update_firewall_rule", {
+    "site_id": "default",
+    "rule_id": "507f1f77bcf86cd799439011",
+    "enabled": False,
+    "confirm": True,
+})
+```
+
+---
+
+### `delete_firewall_rule`
+
+Permanently removes a firewall rule. The tool confirms the rule exists before deleting it and raises `ResourceNotFoundError` if the ID cannot be found.
+
+<ParamField body="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField body="rule_id" type="string" required>
+  The internal ID of the rule to delete.
+</ParamField>
+
+<ParamField body="confirm" type="boolean" required>
+  Must be `true` to delete the rule.
+</ParamField>
+
+<ParamField body="dry_run" type="boolean">
+  When `true`, confirms the rule exists and returns a preview without deleting.
+</ParamField>
+
+```python
+result = await mcp.call_tool("delete_firewall_rule", {
+    "site_id": "default",
+    "rule_id": "507f1f77bcf86cd799439011",
+    "confirm": True,
+})
+# {"success": true, "deleted_rule_id": "507f1f77bcf86cd799439011"}
+```
+
+<Note>
+  Deleting a rule that is actively protecting traffic will immediately allow that traffic. If you are unsure, use `update_firewall_rule` with `enabled=false` first to disable the rule without removing it.
+</Note>

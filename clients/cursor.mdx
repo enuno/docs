@@ -1,0 +1,151 @@
+---
+title: "Connect UniFi MCP Server to Cursor"
+description: "Configure the UniFi MCP Server in Cursor's MCP settings file to query and manage your UniFi network directly from the Cursor Chat sidebar."
+---
+
+Cursor is an AI-powered code editor that supports MCP servers through a dedicated settings file. Adding the UniFi MCP Server to Cursor lets you manage your network infrastructure directly from the Chat sidebar—useful when you are building automation scripts, writing infrastructure-as-code, or just need quick network context while coding.
+
+## Prerequisites
+
+- Cursor installed and up to date
+- A UniFi API key (from **Settings → Control Plane → Integrations** in the UniFi Site Manager)
+- One of the following: the `unifi-mcp-server` PyPI package installed, `uv` installed, or Docker
+
+## Setup
+
+<Steps>
+  <Step title="Open Cursor MCP settings">
+    In Cursor, open the command palette with `Cmd+Shift+P` (macOS) or `Ctrl+Shift+P` (Windows/Linux) and run **View: Open MCP Settings**. Cursor opens `mcp.json` in the editor.
+
+    If the file does not exist yet, Cursor creates it for you.
+  </Step>
+
+  <Step title="Add the server configuration">
+    Add the `mcpServers` block to `mcp.json`. Choose the tab that matches your installation method.
+
+    <Tabs>
+      <Tab title="PyPI package">
+        Install the package first, then add this config:
+
+        ```bash
+        pip install unifi-mcp-server
+        ```
+
+        ```json
+        {
+          "mcpServers": {
+            "unifi-mcp": {
+              "command": "unifi-mcp-server",
+              "env": {
+                "UNIFI_API_KEY": "your-api-key-here",
+                "UNIFI_API_TYPE": "local",
+                "UNIFI_LOCAL_HOST": "192.168.2.1",
+                "UNIFI_LOCAL_VERIFY_SSL": "false"
+              },
+              "disabled": false
+            }
+          }
+        }
+        ```
+      </Tab>
+      <Tab title="uvx">
+        If you have `uv` installed, `uvx` fetches and runs the package without a separate install step:
+
+        ```json
+        {
+          "mcpServers": {
+            "unifi-mcp": {
+              "command": "uvx",
+              "args": ["unifi-mcp-server"],
+              "env": {
+                "UNIFI_API_KEY": "your-api-key-here",
+                "UNIFI_API_TYPE": "local",
+                "UNIFI_LOCAL_HOST": "192.168.2.1"
+              },
+              "disabled": false
+            }
+          }
+        }
+        ```
+      </Tab>
+      <Tab title="Docker">
+        Pull the image first, then add this config:
+
+        ```bash
+        docker pull ghcr.io/enuno/unifi-mcp-server:latest
+        ```
+
+        ```json
+        {
+          "mcpServers": {
+            "unifi-mcp": {
+              "command": "docker",
+              "args": [
+                "run",
+                "--rm",
+                "-i",
+                "--name",
+                "unifi-mcp-server",
+                "-e",
+                "UNIFI_API_KEY=your-api-key-here",
+                "-e",
+                "UNIFI_API_TYPE=local",
+                "-e",
+                "UNIFI_LOCAL_HOST=192.168.2.1",
+                "-e",
+                "UNIFI_LOCAL_VERIFY_SSL=false",
+                "ghcr.io/enuno/unifi-mcp-server:latest"
+              ],
+              "disabled": false
+            }
+          }
+        }
+        ```
+
+        <Warning>
+          Do not add the `-d` (detached) flag. Cursor requires an open stdin/stdout connection to the server process, which is only possible in the foreground.
+        </Warning>
+      </Tab>
+    </Tabs>
+
+    Replace `your-api-key-here` with your actual UniFi API key and `192.168.2.1` with your gateway's IP address. The `"disabled": false` field tells Cursor the server is active.
+  </Step>
+
+  <Step title="Save and restart Cursor">
+    Save `mcp.json`. Then fully quit and reopen Cursor so it picks up the new configuration.
+
+    <Note>
+      Cursor reads MCP settings at startup. Changes to `mcp.json` require a full restart to take effect.
+    </Note>
+  </Step>
+
+  <Step title="Test in the Chat sidebar">
+    Open the Chat sidebar (`Cmd+L` on macOS, `Ctrl+L` on Windows/Linux) and try one of these prompts:
+
+    - "List my UniFi devices"
+    - "Show connected clients on site default"
+    - "What firewall rules are active on my network?"
+    - "Show me the current bandwidth usage by application"
+
+    Cursor routes the request to the UniFi MCP Server and displays the response inline in Chat.
+
+    <Note>
+      MCP tools are only available in the **Chat** sidebar (Agent mode), not in inline code completions or the Composer panel. Make sure you are in Chat when invoking UniFi tools.
+    </Note>
+  </Step>
+</Steps>
+
+## Environment variables reference
+
+| Variable | Required | Description |
+|---|---|---|
+| `UNIFI_API_KEY` | Yes | Your UniFi API key from unifi.ui.com |
+| `UNIFI_API_TYPE` | Yes | `local`, `cloud-v1`, or `cloud-ea` |
+| `UNIFI_LOCAL_HOST` | For local | IP address of your UniFi gateway |
+| `UNIFI_LOCAL_PORT` | No | Gateway port (default: `443`) |
+| `UNIFI_LOCAL_VERIFY_SSL` | No | SSL verification (default: `false`) |
+| `UNIFI_DEFAULT_SITE` | No | Default site ID (default: `default`) |
+
+<Tip>
+  The local gateway API (`UNIFI_API_TYPE=local`) unlocks full network management capabilities including device control, network configuration, and firewall rules. Cloud API modes (`cloud-v1`, `cloud-ea`) are limited to read-only site statistics.
+</Tip>

@@ -1,0 +1,307 @@
+---
+title: "Network query tools reference"
+description: "Reference for list_vlans, get_network_details, get_subnet_info, and get_network_statistics for querying UniFi network and VLAN configuration."
+---
+
+The network query tools give you full visibility into how your UniFi site is segmented — which VLANs exist, how subnets are configured, and how traffic is distributed across networks. All four tools are read-only and can be called at any time without affecting your network configuration.
+
+## `list_vlans`
+
+Returns all network configurations on a site. Despite the name, this tool returns every network — not just those with an explicit VLAN ID — because the local gateway API does not always populate `vlan_id` for every network type.
+
+```python
+result = await mcp.call_tool("list_vlans", {
+    "site_id": "default"
+})
+```
+
+### Parameters
+
+<ParamField path="site_id" type="string" required>
+  The site identifier. Use `"default"` for single-site deployments.
+</ParamField>
+
+<ParamField path="limit" type="number" default="100">
+  Maximum number of networks to return.
+</ParamField>
+
+<ParamField path="offset" type="number" default="0">
+  Number of networks to skip. Use with `limit` for pagination across large site configurations.
+</ParamField>
+
+### Response
+
+Returns an array of network objects.
+
+<Expandable title="Network object fields">
+  <ResponseField name="id" type="string">
+    Unique network identifier (`_id` from the UniFi API).
+  </ResponseField>
+  <ResponseField name="name" type="string">
+    Network name as configured in UniFi Network.
+  </ResponseField>
+  <ResponseField name="purpose" type="string">
+    Network purpose: `corporate`, `guest`, `vlan-only`, or `wan`.
+  </ResponseField>
+  <ResponseField name="vlan_id" type="number">
+    VLAN tag number (1–4094). May be absent or `null` for the default LAN.
+  </ResponseField>
+  <ResponseField name="ip_subnet" type="string">
+    Subnet in CIDR notation, for example `192.168.10.0/24`.
+  </ResponseField>
+  <ResponseField name="dhcpd_enabled" type="boolean">
+    Whether the built-in DHCP server is active for this network.
+  </ResponseField>
+</Expandable>
+
+### Example response
+
+```json
+[
+  {
+    "id": "507f191e810c19729de860ea",
+    "name": "LAN",
+    "purpose": "corporate",
+    "vlan_id": 1,
+    "ip_subnet": "192.168.1.0/24",
+    "dhcpd_enabled": true
+  },
+  {
+    "id": "507f191e810c19729de860eb",
+    "name": "IoT",
+    "purpose": "corporate",
+    "vlan_id": 20,
+    "ip_subnet": "192.168.20.0/24",
+    "dhcpd_enabled": true
+  }
+]
+```
+
+---
+
+## `get_network_details`
+
+Returns the full configuration record for a single network identified by its ID.
+
+```python
+result = await mcp.call_tool("get_network_details", {
+    "site_id": "default",
+    "network_id": "507f191e810c19729de860ea"
+})
+```
+
+### Parameters
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="network_id" type="string" required>
+  The network's unique identifier. Use `list_vlans` to discover network IDs.
+</ParamField>
+
+### Response
+
+Returns a single network object with the same fields as `list_vlans`, plus any additional configuration fields stored for that network.
+
+### Example response
+
+```json
+{
+  "id": "507f191e810c19729de860ea",
+  "name": "LAN",
+  "purpose": "corporate",
+  "vlan_id": 1,
+  "ip_subnet": "192.168.1.0/24",
+  "dhcpd_enabled": true
+}
+```
+
+<Info>
+  If the network ID does not exist on the site, the tool raises `ResourceNotFoundError`. Network IDs are site-scoped — an ID from one site is not valid on another.
+</Info>
+
+---
+
+## `get_subnet_info`
+
+Returns detailed subnet and DHCP configuration for a single network. This is more focused than `get_network_details` and is specifically useful when you need to inspect DHCP range, lease time, DNS servers, or gateway settings.
+
+```python
+result = await mcp.call_tool("get_subnet_info", {
+    "site_id": "default",
+    "network_id": "507f191e810c19729de860ea"
+})
+```
+
+### Parameters
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="network_id" type="string" required>
+  The network's unique identifier.
+</ParamField>
+
+### Response
+
+<ResponseField name="network_id" type="string">
+  The network identifier that was queried.
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  Network name.
+</ResponseField>
+
+<ResponseField name="ip_subnet" type="string">
+  Subnet in CIDR notation.
+</ResponseField>
+
+<ResponseField name="vlan_id" type="number">
+  VLAN tag number. May be `null` for the default LAN.
+</ResponseField>
+
+<ResponseField name="dhcpd_enabled" type="boolean">
+  Whether the UniFi DHCP server is enabled for this network.
+</ResponseField>
+
+<ResponseField name="dhcpd_start" type="string">
+  First IP address in the DHCP lease range.
+</ResponseField>
+
+<ResponseField name="dhcpd_stop" type="string">
+  Last IP address in the DHCP lease range.
+</ResponseField>
+
+<ResponseField name="dhcpd_leasetime" type="number">
+  DHCP lease duration in seconds.
+</ResponseField>
+
+<ResponseField name="dhcpd_dns_1" type="string">
+  Primary DNS server address pushed to DHCP clients.
+</ResponseField>
+
+<ResponseField name="dhcpd_dns_2" type="string">
+  Secondary DNS server address.
+</ResponseField>
+
+<ResponseField name="dhcpd_dns_3" type="string">
+  Tertiary DNS server address.
+</ResponseField>
+
+<ResponseField name="dhcpd_dns_4" type="string">
+  Quaternary DNS server address.
+</ResponseField>
+
+<ResponseField name="dhcpd_gateway" type="string">
+  Gateway IP address pushed to DHCP clients.
+</ResponseField>
+
+<ResponseField name="domain_name" type="string">
+  Local domain name pushed to DHCP clients, for example `local`.
+</ResponseField>
+
+### Example response
+
+```json
+{
+  "network_id": "507f191e810c19729de860ea",
+  "name": "LAN",
+  "ip_subnet": "192.168.1.0/24",
+  "vlan_id": 1,
+  "dhcpd_enabled": true,
+  "dhcpd_start": "192.168.1.100",
+  "dhcpd_stop": "192.168.1.254",
+  "dhcpd_leasetime": 86400,
+  "dhcpd_dns_1": "8.8.8.8",
+  "dhcpd_dns_2": "8.8.4.4",
+  "dhcpd_dns_3": null,
+  "dhcpd_dns_4": null,
+  "dhcpd_gateway": "192.168.1.1",
+  "domain_name": "local"
+}
+```
+
+---
+
+## `get_network_statistics`
+
+Returns traffic and client usage statistics aggregated per network for an entire site. Useful for identifying which VLANs are busiest and how many clients are on each segment.
+
+```python
+result = await mcp.call_tool("get_network_statistics", {
+    "site_id": "default"
+})
+```
+
+### Parameters
+
+<ParamField path="site_id" type="string" required>
+  The site identifier. This tool returns statistics for all networks on the site.
+</ParamField>
+
+### Response
+
+<ResponseField name="site_id" type="string">
+  The site that was queried.
+</ResponseField>
+
+<ResponseField name="networks" type="object[]">
+  Array of per-network statistics objects.
+  <Expandable title="Network statistics fields">
+    <ResponseField name="network_id" type="string">
+      Network identifier.
+    </ResponseField>
+    <ResponseField name="name" type="string">
+      Network name.
+    </ResponseField>
+    <ResponseField name="vlan_id" type="number">
+      VLAN tag number.
+    </ResponseField>
+    <ResponseField name="client_count" type="number">
+      Number of active clients currently on this network segment.
+    </ResponseField>
+    <ResponseField name="total_tx_bytes" type="number">
+      Total bytes transmitted by all clients on this network.
+    </ResponseField>
+    <ResponseField name="total_rx_bytes" type="number">
+      Total bytes received by all clients on this network.
+    </ResponseField>
+    <ResponseField name="total_bytes" type="number">
+      Combined transmit and receive bytes.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Example response
+
+```json
+{
+  "site_id": "default",
+  "networks": [
+    {
+      "network_id": "507f191e810c19729de860ea",
+      "name": "LAN",
+      "vlan_id": 1,
+      "client_count": 15,
+      "total_tx_bytes": 10240000,
+      "total_rx_bytes": 20480000,
+      "total_bytes": 30720000
+    },
+    {
+      "network_id": "507f191e810c19729de860eb",
+      "name": "IoT",
+      "vlan_id": 20,
+      "client_count": 8,
+      "total_tx_bytes": 2048000,
+      "total_rx_bytes": 1024000,
+      "total_bytes": 3072000
+    }
+  ]
+}
+```
+
+<Tip>
+  Client counts in `get_network_statistics` are calculated from the active client table by matching each client's `vlan` field to the network's `vlan_id`. If you see zero clients on a network you know has devices, verify that the VLAN ID is correctly set on both the network and the switch ports.
+</Tip>

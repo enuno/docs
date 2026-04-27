@@ -1,0 +1,418 @@
+---
+title: "ACL and traffic matching tools reference"
+description: "Create and manage ACL rules and reusable traffic matching lists to precisely control network traffic flow across your UniFi sites."
+---
+
+Access Control Lists (ACLs) give you fine-grained control over which traffic is allowed or denied between sources and destinations on your network. Traffic matching lists let you define reusable groups of IP addresses, IPv6 addresses, or ports that you can reference in rules and policies. Together, these tools let your AI assistant build and maintain a complete traffic policy without you opening the UniFi console.
+
+## ACL rules
+
+### `list_acl_rules`
+
+Returns all ACL rules configured for a site. Supports pagination and optional filtering.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="limit" type="integer">
+  Maximum number of rules to return.
+</ParamField>
+
+<ParamField path="offset" type="integer">
+  Number of rules to skip (for pagination).
+</ParamField>
+
+<ParamField path="filter_expr" type="string">
+  A filter expression to narrow results.
+</ParamField>
+
+---
+
+### `get_acl_rule`
+
+Returns the details of a single ACL rule by its ID.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="acl_rule_id" type="string" required>
+  The rule identifier.
+</ParamField>
+
+---
+
+### `create_acl_rule`
+
+Creates a new ACL rule. All write operations require explicit confirmation. Use `dry_run=true` first to preview the rule that would be created.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="name" type="string" required>
+  A descriptive name for the rule.
+</ParamField>
+
+<ParamField path="action" type="string" required>
+  The action to take when traffic matches. Accepted values: `allow`, `deny`.
+</ParamField>
+
+<ParamField path="enabled" type="boolean">
+  Whether the rule is active immediately. Defaults to `true`.
+</ParamField>
+
+<ParamField path="source_type" type="string">
+  The source type. Accepted values: `network`, `device`, `ip`, `any`.
+</ParamField>
+
+<ParamField path="source_id" type="string">
+  The ID of the source resource (used when `source_type` is `network` or `device`).
+</ParamField>
+
+<ParamField path="source_network" type="string">
+  A source network CIDR (e.g., `192.168.10.0/24`). Used when `source_type` is `ip`.
+</ParamField>
+
+<ParamField path="destination_type" type="string">
+  The destination type. Accepted values: `network`, `device`, `ip`, `any`.
+</ParamField>
+
+<ParamField path="destination_id" type="string">
+  The ID of the destination resource.
+</ParamField>
+
+<ParamField path="destination_network" type="string">
+  A destination network CIDR.
+</ParamField>
+
+<ParamField path="protocol" type="string">
+  Protocol to match. Accepted values: `tcp`, `udp`, `icmp`, `all`.
+</ParamField>
+
+<ParamField path="src_port" type="integer">
+  Source port number (1–65535).
+</ParamField>
+
+<ParamField path="dst_port" type="integer">
+  Destination port number (1–65535).
+</ParamField>
+
+<ParamField path="priority" type="integer">
+  Rule priority. Lower numbers are evaluated first. Defaults to `100`.
+</ParamField>
+
+<ParamField path="description" type="string">
+  Optional free-text description.
+</ParamField>
+
+<ParamField path="confirm" type="boolean" required>
+  Must be `true` to create the rule.
+</ParamField>
+
+<ParamField path="dry_run" type="boolean">
+  When `true`, returns the payload without applying changes.
+</ParamField>
+
+<CodeGroup>
+```json Dry run
+{
+  "site_id": "default",
+  "name": "Block IoT to Corporate",
+  "action": "deny",
+  "source_type": "network",
+  "source_id": "net-iot-vlan30",
+  "destination_type": "network",
+  "destination_id": "net-corp-vlan10",
+  "protocol": "all",
+  "priority": 50,
+  "confirm": true,
+  "dry_run": true
+}
+```
+
+```json Create rule
+{
+  "site_id": "default",
+  "name": "Block IoT to Corporate",
+  "action": "deny",
+  "source_type": "network",
+  "source_id": "net-iot-vlan30",
+  "destination_type": "network",
+  "destination_id": "net-corp-vlan10",
+  "protocol": "all",
+  "priority": 50,
+  "confirm": true
+}
+```
+</CodeGroup>
+
+---
+
+### `update_acl_rule`
+
+Updates an existing ACL rule. Only the fields you supply are changed.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="acl_rule_id" type="string" required>
+  The ID of the rule to update.
+</ParamField>
+
+<ParamField path="name" type="string">
+  New rule name.
+</ParamField>
+
+<ParamField path="action" type="string">
+  New action (`allow` or `deny`).
+</ParamField>
+
+<ParamField path="enabled" type="boolean">
+  Enable or disable the rule.
+</ParamField>
+
+<ParamField path="source_type" type="string">
+  Updated source type.
+</ParamField>
+
+<ParamField path="source_id" type="string">
+  Updated source resource ID.
+</ParamField>
+
+<ParamField path="source_network" type="string">
+  Updated source network CIDR.
+</ParamField>
+
+<ParamField path="destination_type" type="string">
+  Updated destination type.
+</ParamField>
+
+<ParamField path="destination_id" type="string">
+  Updated destination resource ID.
+</ParamField>
+
+<ParamField path="destination_network" type="string">
+  Updated destination network CIDR.
+</ParamField>
+
+<ParamField path="protocol" type="string">
+  Updated protocol.
+</ParamField>
+
+<ParamField path="src_port" type="integer">
+  Updated source port.
+</ParamField>
+
+<ParamField path="dst_port" type="integer">
+  Updated destination port.
+</ParamField>
+
+<ParamField path="priority" type="integer">
+  Updated rule priority.
+</ParamField>
+
+<ParamField path="description" type="string">
+  Updated description.
+</ParamField>
+
+<ParamField path="confirm" type="boolean" required>
+  Must be `true` to apply the update.
+</ParamField>
+
+<ParamField path="dry_run" type="boolean">
+  Preview the update without applying it.
+</ParamField>
+
+---
+
+### `delete_acl_rule`
+
+Permanently deletes an ACL rule.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="acl_rule_id" type="string" required>
+  The ID of the rule to delete.
+</ParamField>
+
+<ParamField path="confirm" type="boolean" required>
+  Must be `true` to delete the rule.
+</ParamField>
+
+<ParamField path="dry_run" type="boolean">
+  Preview the deletion without applying it.
+</ParamField>
+
+---
+
+## Traffic matching lists
+
+Traffic matching lists are reusable named groups of IP addresses or ports that you can reference across multiple rules without repeating values. Supported list types are `IPV4_ADDRESSES`, `IPV6_ADDRESSES`, and `PORTS`.
+
+### `list_traffic_matching_lists`
+
+Returns all traffic matching lists for a site.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="limit" type="integer">
+  Maximum number of lists to return.
+</ParamField>
+
+<ParamField path="offset" type="integer">
+  Number of lists to skip (for pagination).
+</ParamField>
+
+---
+
+### `get_traffic_matching_list`
+
+Returns the details of a single traffic matching list.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="list_id" type="string" required>
+  The list identifier.
+</ParamField>
+
+---
+
+### `create_traffic_matching_list`
+
+Creates a new traffic matching list.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="list_type" type="string" required>
+  The type of entries in this list. Accepted values: `PORTS`, `IPV4_ADDRESSES`, `IPV6_ADDRESSES`.
+</ParamField>
+
+<ParamField path="name" type="string" required>
+  A display name for the list.
+</ParamField>
+
+<ParamField path="items" type="array" required>
+  The list entries. For `PORTS`, use port numbers as strings (e.g., `["80", "443", "8080"]`). For IP lists, use CIDR notation or individual addresses.
+</ParamField>
+
+<ParamField path="confirm" type="boolean" required>
+  Must be `true` to create the list.
+</ParamField>
+
+<ParamField path="dry_run" type="boolean">
+  Preview creation without applying it.
+</ParamField>
+
+```json Example: create a blocked-ports list
+{
+  "site_id": "default",
+  "list_type": "PORTS",
+  "name": "Restricted Ports",
+  "items": ["23", "137", "138", "139", "445"],
+  "confirm": true
+}
+```
+
+---
+
+### `update_traffic_matching_list`
+
+Updates an existing traffic matching list. Supply only the fields you want to change.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="list_id" type="string" required>
+  The list identifier.
+</ParamField>
+
+<ParamField path="list_type" type="string">
+  New list type (`PORTS`, `IPV4_ADDRESSES`, or `IPV6_ADDRESSES`).
+</ParamField>
+
+<ParamField path="name" type="string">
+  New display name.
+</ParamField>
+
+<ParamField path="items" type="array">
+  Replacement list of items. This overwrites the existing entries.
+</ParamField>
+
+<ParamField path="confirm" type="boolean" required>
+  Must be `true` to apply the update.
+</ParamField>
+
+<ParamField path="dry_run" type="boolean">
+  Preview the update without applying it.
+</ParamField>
+
+---
+
+### `delete_traffic_matching_list`
+
+Permanently deletes a traffic matching list.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="list_id" type="string" required>
+  The list identifier to delete.
+</ParamField>
+
+<ParamField path="confirm" type="boolean" required>
+  Must be `true` to delete the list.
+</ParamField>
+
+<ParamField path="dry_run" type="boolean">
+  Preview the deletion without applying it.
+</ParamField>
+
+---
+
+## Example: deny inter-VLAN access on specific ports
+
+This example creates a port list for common SMB and NetBIOS ports, then uses an ACL rule to block traffic from the Guest VLAN from reaching those ports on the Corporate VLAN.
+
+```python
+# Step 1: Create a named port list
+create_traffic_matching_list(
+    site_id="default",
+    list_type="PORTS",
+    name="SMB and NetBIOS Ports",
+    items=["137", "138", "139", "445"],
+    confirm=True
+)
+
+# Step 2: Create the deny rule
+create_acl_rule(
+    site_id="default",
+    name="Block Guest SMB to Corporate",
+    action="deny",
+    source_type="network",
+    source_id="net-guest-vlan100",
+    destination_type="network",
+    destination_id="net-corp-vlan10",
+    protocol="tcp",
+    dst_port=445,
+    priority=10,
+    description="Prevent guest devices from reaching corporate file shares",
+    confirm=True
+)
+```
+
+<Tip>
+  Lower priority numbers take precedence. Set your most specific deny rules at low numbers (e.g., 10–50) so they are evaluated before broader allow rules.
+</Tip>

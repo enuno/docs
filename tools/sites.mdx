@@ -1,0 +1,220 @@
+---
+title: "Site query tools reference"
+description: "Reference for list_sites, get_site_details, and get_site_statistics for querying UniFi site inventory and site-wide health metrics."
+---
+
+The site query tools give you visibility into all UniFi sites your API key has access to. In single-site deployments you will typically deal with one site named `"default"`, but these tools become essential in multi-site environments where you need to discover site identifiers before calling device or network tools. All three tools are read-only.
+
+## `list_sites`
+
+Returns all sites accessible with your configured API key. The tool automatically selects the correct API endpoint based on whether you are using the local gateway or cloud API.
+
+```python
+result = await mcp.call_tool("list_sites", {})
+```
+
+### Parameters
+
+<ParamField path="limit" type="number" default="100">
+  Maximum number of sites to return.
+</ParamField>
+
+<ParamField path="offset" type="number" default="0">
+  Number of sites to skip for pagination across large multi-site organizations.
+</ParamField>
+
+### Response
+
+Returns an array of site objects.
+
+<Expandable title="Site object fields">
+  <ResponseField name="id" type="string">
+    Unique site identifier. Pass this value as `site_id` in other tools.
+  </ResponseField>
+  <ResponseField name="name" type="string">
+    Site name as configured in UniFi Site Manager.
+  </ResponseField>
+  <ResponseField name="desc" type="string">
+    Optional site description.
+  </ResponseField>
+  <ResponseField name="internalReference" type="string">
+    Internal reference string. Some sites are addressable by this value as well as by `id` or `name`.
+  </ResponseField>
+</Expandable>
+
+### Example response
+
+```json
+[
+  {
+    "id": "default",
+    "name": "Home",
+    "desc": "Main home network"
+  },
+  {
+    "id": "site-abc123",
+    "name": "Office",
+    "desc": "Corporate office location"
+  }
+]
+```
+
+---
+
+## `get_site_details`
+
+Returns the full record for a single site. You can look up a site by its `_id`, by its `name`, or by its `internalReference` — the tool checks all three fields.
+
+```python
+result = await mcp.call_tool("get_site_details", {
+    "site_id": "default"
+})
+```
+
+### Parameters
+
+<ParamField path="site_id" type="string" required>
+  The site identifier. Accepted values:
+
+  - The site's `_id` (for example, `"507f1f77bcf86cd799439011"`)
+  - The site's `name` (for example, `"Home"`)
+  - The site's `internalReference` string
+  - `"default"` for the primary site on local gateway deployments
+</ParamField>
+
+### Response
+
+Returns a single site object with the same fields as `list_sites`.
+
+### Example response
+
+```json
+{
+  "id": "default",
+  "name": "Default Site",
+  "desc": "Default site description"
+}
+```
+
+<Info>
+  If no site matches the provided `site_id`, the tool raises `ResourceNotFoundError`. Double-check the value against `list_sites` output if you receive this error.
+</Info>
+
+---
+
+## `get_site_statistics`
+
+Returns a comprehensive summary of site health — device counts by type, online/offline status, client counts by connection type, network count, and total bandwidth consumed across all clients.
+
+```python
+result = await mcp.call_tool("get_site_statistics", {
+    "site_id": "default"
+})
+```
+
+### Parameters
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+### Response
+
+<ResponseField name="site_id" type="string">
+  The site that was queried.
+</ResponseField>
+
+<ResponseField name="devices" type="object">
+  Device inventory summary.
+  <Expandable title="Device fields">
+    <ResponseField name="total" type="number">
+      Total number of adopted devices on the site.
+    </ResponseField>
+    <ResponseField name="online" type="number">
+      Number of devices with state `1` (connected).
+    </ResponseField>
+    <ResponseField name="offline" type="number">
+      Number of devices that are not responding.
+    </ResponseField>
+    <ResponseField name="access_points" type="number">
+      Count of devices with type `uap`.
+    </ResponseField>
+    <ResponseField name="switches" type="number">
+      Count of devices with type `usw`.
+    </ResponseField>
+    <ResponseField name="gateways" type="number">
+      Count of devices with type `ugw`, `udm`, or `uxg`.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="clients" type="object">
+  Active client summary.
+  <Expandable title="Client fields">
+    <ResponseField name="total" type="number">
+      Total active clients on the site.
+    </ResponseField>
+    <ResponseField name="wired" type="number">
+      Clients connected via Ethernet.
+    </ResponseField>
+    <ResponseField name="wireless" type="number">
+      Clients connected via WiFi.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="networks" type="object">
+  <Expandable title="Network fields">
+    <ResponseField name="total" type="number">
+      Total number of configured networks on the site.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="bandwidth" type="object">
+  Aggregate bandwidth across all active clients.
+  <Expandable title="Bandwidth fields">
+    <ResponseField name="total_tx_bytes" type="number">
+      Total bytes transmitted by all clients.
+    </ResponseField>
+    <ResponseField name="total_rx_bytes" type="number">
+      Total bytes received by all clients.
+    </ResponseField>
+    <ResponseField name="total_bytes" type="number">
+      Combined total bytes.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Example response
+
+```json
+{
+  "site_id": "default",
+  "devices": {
+    "total": 25,
+    "online": 24,
+    "offline": 1,
+    "access_points": 10,
+    "switches": 8,
+    "gateways": 7
+  },
+  "clients": {
+    "total": 42,
+    "wired": 15,
+    "wireless": 27
+  },
+  "networks": {
+    "total": 5
+  },
+  "bandwidth": {
+    "total_tx_bytes": 102400000,
+    "total_rx_bytes": 204800000,
+    "total_bytes": 307200000
+  }
+}
+```
+
+<Tip>
+  `get_site_statistics` gathers data from three separate API endpoints (devices, active clients, and networks) in a single call, making it the most efficient way to get a site health snapshot. Use it as a starting point before drilling into specific devices or clients.
+</Tip>

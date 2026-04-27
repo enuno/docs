@@ -1,0 +1,379 @@
+---
+title: "Manage multiple UniFi sites from one AI assistant"
+description: "Monitor all your UniFi sites in one place—compare health scores, aggregate device and client stats, and search across locations from a single AI session."
+---
+
+If you manage more than one UniFi site—whether for a business with multiple offices, a managed service provider with many customers, or a home lab with separate network segments—the UniFi MCP Server lets your AI assistant work across all of them from a single session. You can list sites, compare performance metrics, monitor health scores, and aggregate device and client statistics without switching between consoles.
+
+<Note>
+Multi-site management tools require the **Site Manager API**. Set `UNIFI_SITE_MANAGER_ENABLED=true` and provide your `SITE_MANAGER_API_KEY` from [api.ui.com](https://api.ui.com). Without this, most tools in this section will return an error.
+</Note>
+
+## What you can do
+
+<CardGroup cols={2}>
+  <Card title="List all sites" icon="building">
+    Retrieve all sites with aggregate device counts, client counts, and bandwidth stats.
+  </Card>
+  <Card title="Health monitoring" icon="heart-pulse">
+    Get health scores and status for all sites—healthy, degraded, or down.
+  </Card>
+  <Card title="Cross-site analytics" icon="chart-line">
+    Aggregate totals and compare performance metrics across every site you manage.
+  </Card>
+  <Card title="Cross-site search" icon="magnifying-glass">
+    Find a device, client, or network across all sites in one query.
+  </Card>
+</CardGroup>
+
+## The `site_id` parameter
+
+Every tool in the UniFi MCP Server that operates on a specific site accepts a `site_id` parameter. When you have multiple sites, pass the appropriate site ID to scope any operation to that location.
+
+```python
+# List devices on the New York office site
+devices = await mcp.call_tool("list_devices_by_type", {
+    "site_id": "nyc-office",
+    "device_type": "uap"
+})
+
+# Get network stats for the London office
+stats = await mcp.call_tool("get_network_statistics", {
+    "site_id": "lon-office"
+})
+```
+
+Use `list_all_sites` (read below) to discover the site IDs for your deployment.
+
+## Listing all sites
+
+**Example prompts:**
+
+- "Show me all my UniFi sites"
+- "How many sites are there in total?"
+- "List all sites with their device counts"
+
+```python
+sites = await mcp.call_tool("list_all_sites_aggregated", {})
+```
+
+**Response:**
+```json
+[
+  {
+    "site_id": "nyc-office",
+    "name": "New York Office",
+    "device_count": 12,
+    "client_count": 85,
+    "status": "healthy"
+  },
+  {
+    "site_id": "lon-office",
+    "name": "London Office",
+    "device_count": 8,
+    "client_count": 42,
+    "status": "healthy"
+  },
+  {
+    "site_id": "chi-branch",
+    "name": "Chicago Branch",
+    "device_count": 4,
+    "client_count": 18,
+    "status": "degraded"
+  }
+]
+```
+
+## Site health monitoring
+
+The `get_site_health_summary` tool returns a health summary that includes device and client counts, uptime percentage, and an overall status for each site.
+
+**Example prompts:**
+
+- "Which sites are having problems?"
+- "Show the health score for the London office"
+- "Are all my sites healthy?"
+
+```python
+# Health summary for all sites
+summaries = await mcp.call_tool("get_site_health_summary", {})
+
+# Health summary for a specific site
+summary = await mcp.call_tool("get_site_health_summary", {
+    "site_id": "chi-branch"
+})
+```
+
+**Response (single site):**
+```json
+{
+  "site_id": "chi-branch",
+  "site_name": "Chicago Branch",
+  "status": "degraded",
+  "devices_total": 4,
+  "devices_online": 3,
+  "clients_active": 18,
+  "uptime_percentage": 75.0
+}
+```
+
+Health statuses:
+
+| Status | Meaning |
+|--------|---------|
+| `healthy` | All devices online, no issues detected |
+| `degraded` | Some devices offline or performance issues |
+| `down` | Site unreachable or critical failure |
+
+## Cross-site aggregate statistics
+
+`get_cross_site_statistics` aggregates device counts, client counts, bandwidth, and health status across every site you manage in a single call.
+
+**Example prompts:**
+
+- "Give me a summary across all my sites"
+- "How many total devices and clients do I manage?"
+
+```python
+stats = await mcp.call_tool("get_cross_site_statistics", {})
+```
+
+**Response:**
+```json
+{
+  "total_sites": 3,
+  "sites_healthy": 2,
+  "sites_degraded": 1,
+  "sites_down": 0,
+  "total_devices": 24,
+  "devices_online": 23,
+  "total_clients": 145,
+  "total_bandwidth_up_mbps": 0.0,
+  "total_bandwidth_down_mbps": 0.0,
+  "site_summaries": [...]
+}
+```
+
+## Comparing site performance
+
+`compare_site_performance` ranks all sites by uptime and device availability, identifying your best and worst performers.
+
+**Example prompts:**
+
+- "Which site is performing the worst this week?"
+- "Compare network performance across all my offices"
+- "Which location has the highest uptime?"
+
+```python
+comparison = await mcp.call_tool("compare_site_performance", {})
+```
+
+**Response:**
+```json
+{
+  "total_sites": 3,
+  "best_performing_site": {
+    "site_id": "nyc-office",
+    "site_name": "New York Office",
+    "uptime_percentage": 99.9,
+    "device_online_percentage": 100.0,
+    "avg_latency_ms": 12.5,
+    "health_status": "healthy"
+  },
+  "worst_performing_site": {
+    "site_id": "chi-branch",
+    "site_name": "Chicago Branch",
+    "uptime_percentage": 75.0,
+    "device_online_percentage": 75.0,
+    "avg_latency_ms": 45.2,
+    "health_status": "degraded"
+  },
+  "average_uptime": 91.6,
+  "average_latency_ms": 24.0,
+  "site_metrics": [...]
+}
+```
+
+## Searching across all sites
+
+`search_across_sites` lets you find a device, client, or network across every site without knowing which site it belongs to.
+
+**Example prompts:**
+
+- "Find the device named 'Server-Room-AP' across all my sites"
+- "Which site is the client with MAC aa:bb:cc:dd:ee:ff on?"
+- "Search for the 'Guest' network across all locations"
+
+```python
+result = await mcp.call_tool("search_across_sites", {
+    "query": "server-room",
+    "search_type": "device"
+})
+```
+
+**Response:**
+```json
+{
+  "total_results": 2,
+  "search_query": "server-room",
+  "result_type": "device",
+  "results": [
+    {
+      "type": "device",
+      "site_id": "nyc-office",
+      "site_name": "New York Office",
+      "resource": {
+        "name": "Server-Room-AP",
+        "mac": "aa:bb:cc:dd:ee:ff",
+        "model": "U6-Pro"
+      }
+    }
+  ]
+}
+```
+
+Set `search_type` to `device`, `client`, `network`, or `all`.
+
+## Site inventory
+
+`get_site_inventory` provides a detailed breakdown of resources at one or all sites—device counts by type, client counts, network counts, SSID counts, VPN tunnels, and firewall rules.
+
+```python
+# Inventory for a specific site
+inventory = await mcp.call_tool("get_site_inventory", {
+    "site_id": "nyc-office"
+})
+
+# Inventory for all sites
+all_inventories = await mcp.call_tool("get_site_inventory", {})
+```
+
+**Response:**
+```json
+{
+  "site_id": "nyc-office",
+  "site_name": "New York Office",
+  "device_count": 12,
+  "device_types": {
+    "uap": 8,
+    "usw": 3,
+    "ugw": 1
+  },
+  "client_count": 85,
+  "network_count": 5,
+  "ssid_count": 3,
+  "uplink_count": 2,
+  "vpn_tunnel_count": 1,
+  "firewall_rule_count": 14
+}
+```
+
+## Internet health and ISP metrics
+
+Monitor ISP performance across sites with latency, bandwidth, jitter, and packet loss data.
+
+**Example prompts:**
+
+- "What is the internet health for the Chicago office?"
+- "Show latency and packet loss for all sites"
+
+```python
+# Internet health across all sites
+health = await mcp.call_tool("get_internet_health", {})
+
+# ISP metrics for a specific site
+isp = await mcp.call_tool("get_isp_metrics", {
+    "site_id": "chi-branch"
+})
+```
+
+**Response:**
+```json
+{
+  "site_id": "chi-branch",
+  "isp_name": "Example ISP",
+  "download_bandwidth_mbps": 480.0,
+  "upload_bandwidth_mbps": 95.0,
+  "latency_ms": 45.2,
+  "jitter_ms": 8.1,
+  "packet_loss_percent": 0.5,
+  "timestamp": "2026-04-22T12:00:00Z"
+}
+```
+
+## Managed hosts
+
+If you manage UniFi consoles (UDM Pro, Cloud Key, etc.), you can list all hosts and check their status.
+
+```python
+hosts = await mcp.call_tool("list_hosts", {
+    "limit": 50,
+    "offset": 0
+})
+```
+
+**Response:**
+```json
+[
+  {
+    "host_id": "host-001",
+    "hostname": "udm-pro-nyc",
+    "ip_address": "192.168.1.1",
+    "model": "UDM-Pro",
+    "version": "3.2.9",
+    "site_count": 1,
+    "status": "online",
+    "last_seen": "2026-04-22T12:00:00Z"
+  }
+]
+```
+
+## Example: morning site health check
+
+This workflow shows how to use multi-site tools for a daily operational review.
+
+<Steps>
+  <Step title="Get aggregate status">
+    ```python
+    stats = await mcp.call_tool("get_cross_site_statistics", {})
+    # Check: sites_degraded or sites_down > 0
+    ```
+  </Step>
+  <Step title="Find problem sites">
+    ```python
+    summaries = await mcp.call_tool("get_site_health_summary", {})
+    # Filter for status == "degraded" or "down"
+    ```
+  </Step>
+  <Step title="Drill into the worst site">
+    ```python
+    isp = await mcp.call_tool("get_isp_metrics", {
+        "site_id": "chi-branch"
+    })
+    # Check latency, packet loss, bandwidth
+    ```
+  </Step>
+  <Step title="Compare all sites">
+    ```python
+    comparison = await mcp.call_tool("compare_site_performance", {})
+    # Review best and worst performers
+    ```
+  </Step>
+</Steps>
+
+## Tool availability by API mode
+
+| Tool | Local API | Cloud EA | Cloud V1 |
+|------|-----------|----------|----------|
+| `list_all_sites_aggregated` | Requires Site Manager | Requires Site Manager | Requires Site Manager |
+| `get_site_health_summary` | Requires Site Manager | Requires Site Manager | Requires Site Manager |
+| `get_cross_site_statistics` | Requires Site Manager | Requires Site Manager | Requires Site Manager |
+| `compare_site_performance` | Requires Site Manager | Requires Site Manager | Requires Site Manager |
+| `search_across_sites` | Requires Site Manager | Requires Site Manager | Requires Site Manager |
+| `get_site_inventory` | Requires Site Manager | Requires Site Manager | Requires Site Manager |
+| `get_isp_metrics` | Requires Site Manager | Requires Site Manager | Requires Site Manager |
+| `list_hosts` | Requires Site Manager | Requires Site Manager | Requires Site Manager |
+
+<Tip>
+All multi-site tools are read-only. They query and aggregate data across sites but do not modify any configuration. No `confirm=True` is required for any multi-site tool.
+</Tip>

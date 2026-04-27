@@ -1,0 +1,150 @@
+{
+  "projectType": "sdk-library",
+  "projectName": "UniFi MCP Server",
+  "projectDescription": "A Model Context Protocol (MCP) server that exposes the UniFi Network Controller API, enabling AI agents and applications to manage UniFi network infrastructure through natural language.",
+  "theme": "luma",
+  "primaryColor": "#848c8e",
+  "lightColor": "#11161e",
+  "darkColor": "#cfd0d2",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Docs",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "api-modes"
+            ]
+          },
+          {
+            "group": "Installation",
+            "pages": [
+              "installation/pip",
+              "installation/docker",
+              "installation/configuration"
+            ]
+          },
+          {
+            "group": "MCP Client Setup",
+            "pages": [
+              "clients/claude-desktop",
+              "clients/cursor",
+              "clients/other-clients"
+            ]
+          },
+          {
+            "group": "Features",
+            "pages": [
+              "features/device-management",
+              "features/network-config",
+              "features/firewall-security",
+              "features/wifi-management",
+              "features/qos-traffic",
+              "features/backup-restore",
+              "features/multi-site"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "advanced/webhooks",
+              "advanced/caching",
+              "advanced/safety-audit",
+              "advanced/troubleshooting"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Tool Reference",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "tools/overview"
+            ]
+          },
+          {
+            "group": "Read Operations",
+            "pages": [
+              "tools/devices",
+              "tools/clients",
+              "tools/networks",
+              "tools/sites",
+              "tools/topology"
+            ]
+          },
+          {
+            "group": "Write Operations",
+            "pages": [
+              "tools/device-control",
+              "tools/network-config",
+              "tools/firewall",
+              "tools/wifi",
+              "tools/port-forwarding",
+              "tools/port-profiles"
+            ]
+          },
+          {
+            "group": "Security & Access",
+            "pages": [
+              "tools/firewall-zones",
+              "tools/acls",
+              "tools/radius",
+              "tools/vouchers"
+            ]
+          },
+          {
+            "group": "Operations",
+            "pages": [
+              "tools/qos",
+              "tools/backups",
+              "tools/site-manager",
+              "tools/dpi"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "77 MCP tools covering the full UniFi Network API surface",
+    "Three API modes: Local Gateway (full access), Cloud v1, and Cloud EA",
+    "Zone-Based Firewall management with zone-to-zone policies",
+    "QoS profiles, traffic shaping, and bandwidth management",
+    "Automated backup scheduling with SHA-256 checksum verification",
+    "Multi-site aggregation, health monitoring, and cross-site analytics",
+    "Real-time network topology discovery and export (JSON, GraphML, DOT)",
+    "Safety-first mutating operations with confirm flag and dry-run mode",
+    "Audit logging for all operations",
+    "Optional Redis caching for improved performance",
+    "Webhook support for real-time UniFi events",
+    "RADIUS authentication and Guest Portal management"
+  ],
+  "publicApiSurface": [
+    "list_devices / get_device_details / get_device_statistics",
+    "list_clients / get_client_details / block_client / unblock_client / reconnect_client",
+    "list_networks / create_network / update_network / delete_network",
+    "list_wlans / create_wlan / update_wlan / delete_wlan",
+    "list_firewall_rules / create_firewall_rule / update_firewall_rule / delete_firewall_rule",
+    "list_firewall_zones / create_firewall_zone / update_firewall_zone",
+    "list_acls / create_acl / update_acl / delete_acl",
+    "list_port_profiles / create_port_profile / update_port_profile",
+    "list_port_forwardings / create_port_forwarding / delete_port_forwarding",
+    "restart_device / locate_device / upgrade_device",
+    "list_qos_profiles / create_qos_profile / update_qos_profile",
+    "create_backup / list_backups / restore_backup / delete_backup",
+    "get_topology / export_topology",
+    "list_sites / get_site_details / create_site / update_site / delete_site",
+    "aggregate_site_metrics / get_site_health",
+    "list_radius_profiles / create_radius_profile / update_radius_profile",
+    "list_vouchers / create_vouchers / delete_voucher",
+    "get_dpi_statistics / list_top_applications",
+    "get_traffic_flows / filter_traffic_flows",
+    "health_check",
+    "MCP Resources: sites://, sites://{site_id}/devices, sites://{site_id}/clients, sites://{site_id}/networks, sites://{site_id}/traffic/flows, site-manager://sites, site-manager://health"
+  ]
+}

@@ -1,0 +1,246 @@
+---
+title: "Device and client control tools reference"
+description: "Reference for UniFi MCP tools that restart devices, toggle LED locate mode, upgrade firmware, and block or reconnect network clients."
+---
+
+The device and client control tools let you take direct action on UniFi infrastructure — restarting access points, triggering firmware upgrades, flashing locator LEDs, and managing client access at the MAC address level. Every tool in this group modifies live network state, so each one requires explicit confirmation before it executes. You can always pass `dry_run=True` first to preview what would happen without making any changes.
+
+<Warning>
+  All tools on this page require `confirm=True` to execute. Calling a tool without it raises a `ConfirmationRequiredError` and no change is made. Use `dry_run=True` to validate parameters and see what the operation would do before committing.
+</Warning>
+
+## Device control
+
+### `restart_device`
+
+Sends a restart command to a UniFi device. The device will go offline briefly while it reboots. Use this to recover a device that is behaving unexpectedly without physically power-cycling it.
+
+<ParamField body="site_id" type="string" required>
+  The site identifier where the device lives. Use `list_all_sites` to find valid site IDs.
+</ParamField>
+
+<ParamField body="device_mac" type="string" required>
+  MAC address of the device to restart, in colon-separated format (e.g. `aa:bb:cc:dd:ee:ff`).
+</ParamField>
+
+<ParamField body="confirm" type="boolean" required>
+  Must be `true` to execute the restart. Any other value raises `ConfirmationRequiredError`.
+</ParamField>
+
+<ParamField body="dry_run" type="boolean">
+  When `true`, validates that the device exists and returns a preview response without restarting. Defaults to `false`.
+</ParamField>
+
+<CodeGroup>
+
+```python dry run
+result = await mcp.call_tool("restart_device", {
+    "site_id": "default",
+    "device_mac": "aa:bb:cc:dd:ee:ff",
+    "dry_run": True,
+    "confirm": True,
+})
+# {"dry_run": true, "would_restart": "aa:bb:cc:dd:ee:ff"}
+```
+
+```python execute
+result = await mcp.call_tool("restart_device", {
+    "site_id": "default",
+    "device_mac": "aa:bb:cc:dd:ee:ff",
+    "confirm": True,
+})
+# {"success": true, "device_mac": "aa:bb:cc:dd:ee:ff", "message": "Device restart initiated"}
+```
+
+</CodeGroup>
+
+---
+
+### `locate_device`
+
+Enables or disables the LED locate mode on a UniFi device. When locate mode is on, the device's LEDs flash in a distinctive pattern so you can physically identify it in a rack or ceiling installation.
+
+<ParamField body="site_id" type="string" required>
+  The site identifier where the device lives.
+</ParamField>
+
+<ParamField body="device_mac" type="string" required>
+  MAC address of the device to locate.
+</ParamField>
+
+<ParamField body="enabled" type="boolean">
+  Set to `true` to start flashing the locate LED, or `false` to stop. Defaults to `true`.
+</ParamField>
+
+<ParamField body="confirm" type="boolean" required>
+  Must be `true` to execute.
+</ParamField>
+
+<ParamField body="dry_run" type="boolean">
+  When `true`, returns a preview without changing the LED state. Defaults to `false`.
+</ParamField>
+
+<CodeGroup>
+
+```python enable locate
+result = await mcp.call_tool("locate_device", {
+    "site_id": "default",
+    "device_mac": "aa:bb:cc:dd:ee:ff",
+    "enabled": True,
+    "confirm": True,
+})
+# {"success": true, "device_mac": "aa:bb:cc:dd:ee:ff", "locate_enabled": true, "message": "Locate mode enabled"}
+```
+
+```python disable locate
+result = await mcp.call_tool("locate_device", {
+    "site_id": "default",
+    "device_mac": "aa:bb:cc:dd:ee:ff",
+    "enabled": False,
+    "confirm": True,
+})
+```
+
+</CodeGroup>
+
+---
+
+### `upgrade_device`
+
+Initiates a firmware upgrade on a UniFi device. By default the device upgrades to the latest available firmware. You can optionally supply a custom firmware URL to target a specific version.
+
+<Warning>
+  The device will restart as part of the upgrade process. Allow several minutes for the upgrade to complete before the device comes back online.
+</Warning>
+
+<ParamField body="site_id" type="string" required>
+  The site identifier where the device lives.
+</ParamField>
+
+<ParamField body="device_mac" type="string" required>
+  MAC address of the device to upgrade.
+</ParamField>
+
+<ParamField body="firmware_url" type="string">
+  Optional URL pointing to a specific firmware binary. When omitted, the controller selects the latest stable firmware.
+</ParamField>
+
+<ParamField body="confirm" type="boolean" required>
+  Must be `true` to initiate the upgrade.
+</ParamField>
+
+<ParamField body="dry_run" type="boolean">
+  When `true`, validates the device exists and returns its current firmware version without starting an upgrade.
+</ParamField>
+
+```python
+result = await mcp.call_tool("upgrade_device", {
+    "site_id": "default",
+    "device_mac": "aa:bb:cc:dd:ee:ff",
+    "confirm": True,
+})
+# {"success": true, "device_mac": "aa:bb:cc:dd:ee:ff", "message": "Firmware upgrade initiated", "current_version": "6.5.55.14277"}
+```
+
+<Tip>
+  Run with `dry_run=True` first to confirm the device is reachable and see its current firmware version before starting the upgrade.
+</Tip>
+
+---
+
+## Client management
+
+### `block_client`
+
+Blocks a client device from accessing the network by MAC address. The block persists until you explicitly unblock the client.
+
+<ParamField body="site_id" type="string" required>
+  The site identifier where the client is registered.
+</ParamField>
+
+<ParamField body="client_mac" type="string" required>
+  MAC address of the client to block.
+</ParamField>
+
+<ParamField body="confirm" type="boolean" required>
+  Must be `true` to block the client.
+</ParamField>
+
+<ParamField body="dry_run" type="boolean">
+  When `true`, validates the client exists and returns a preview without applying the block.
+</ParamField>
+
+```python
+result = await mcp.call_tool("block_client", {
+    "site_id": "default",
+    "client_mac": "11:22:33:44:55:66",
+    "confirm": True,
+})
+# {"success": true, "client_mac": "11:22:33:44:55:66", "message": "Client blocked from network"}
+```
+
+---
+
+### `unblock_client`
+
+Removes a MAC-level block from a previously blocked client, restoring their network access.
+
+<ParamField body="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField body="client_mac" type="string" required>
+  MAC address of the client to unblock.
+</ParamField>
+
+<ParamField body="confirm" type="boolean" required>
+  Must be `true` to unblock the client.
+</ParamField>
+
+<ParamField body="dry_run" type="boolean">
+  When `true`, returns a preview without making changes.
+</ParamField>
+
+```python
+result = await mcp.call_tool("unblock_client", {
+    "site_id": "default",
+    "client_mac": "11:22:33:44:55:66",
+    "confirm": True,
+})
+# {"success": true, "client_mac": "11:22:33:44:55:66", "message": "Client unblocked"}
+```
+
+---
+
+### `reconnect_client`
+
+Forces a currently connected client to disconnect and re-authenticate. This is useful for applying updated network policies or resolving connectivity issues without blocking the client permanently. The client must be actively connected — if it is not present in the active station list, the tool raises `ResourceNotFoundError`.
+
+<ParamField body="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField body="client_mac" type="string" required>
+  MAC address of the connected client to force-reconnect.
+</ParamField>
+
+<ParamField body="confirm" type="boolean" required>
+  Must be `true` to force the reconnection.
+</ParamField>
+
+<ParamField body="dry_run" type="boolean">
+  When `true`, validates the client is active and returns a preview without kicking them.
+</ParamField>
+
+```python
+result = await mcp.call_tool("reconnect_client", {
+    "site_id": "default",
+    "client_mac": "11:22:33:44:55:66",
+    "confirm": True,
+})
+# {"success": true, "client_mac": "11:22:33:44:55:66", "message": "Client forced to reconnect"}
+```
+
+<Note>
+  `reconnect_client` only works on actively connected clients. Use `list_active_clients` to confirm the client is online before calling this tool.
+</Note>

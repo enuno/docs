@@ -1,0 +1,102 @@
+---
+title: "UniFi MCP Server tools overview"
+description: "Browse all 77 UniFi MCP tools by category. Learn how site_id, confirm, and dry_run work, and when to use MCP resources instead of tools."
+---
+
+MCP tools are functions your AI assistant can call to interact with your UniFi network. When you ask Claude or Cursor to "list all access points" or "show me which clients are connected," it translates your request into one or more tool calls behind the scenes. Each tool maps directly to a UniFi API operation and returns structured data the AI can reason over and present back to you.
+
+## Tool categories
+
+The UniFi MCP Server includes 77 tools across seven functional areas.
+
+| Category | Tools | What you can do |
+|---|---|---|
+| **Devices** | 6 | List, search, inspect, and get statistics for UniFi access points, switches, and gateways |
+| **Clients** | 4 | Query active and historical clients by MAC, IP, or hostname |
+| **Networks** | 4 | Inspect network and VLAN configuration, subnet details, and per-network traffic stats |
+| **Sites** | 3 | List sites, retrieve site details, and view site-wide health statistics |
+| **Topology** | 5 | Build a complete network graph, export it in multiple formats, and analyze uplink hierarchy |
+| **Write operations** | 30 | Create and modify networks, firewall rules, WiFi SSIDs, port profiles, and more |
+| **Security & operations** | 25 | Manage firewall zones, ACLs, RADIUS, QoS profiles, backups, and DPI analytics |
+
+<Note>
+  Write operations (those that modify your network) require `confirm=True`. Read operations documented on this page never modify any configuration.
+</Note>
+
+## Common parameter patterns
+
+### `site_id`
+
+Almost every tool accepts a `site_id` parameter that scopes the operation to a single UniFi site. Use `"default"` for single-site installations, or pass the site's internal identifier for multi-site deployments. You can discover site identifiers by calling `list_sites` or reading the `sites://` resource.
+
+### `limit` and `offset`
+
+List tools support pagination through `limit` (maximum number of results) and `offset` (number of results to skip). Both parameters are optional — omitting them returns a reasonable default set of results.
+
+### `confirm=True` for write operations
+
+Every tool that modifies your network requires you to pass `confirm=True`. This prevents accidental changes when your AI assistant is exploring or planning. If you omit `confirm`, the tool raises a `ConfirmationRequiredError` and explains what it would have done.
+
+### `dry_run=True` for safe previews
+
+Before applying any write operation, you can pass `dry_run=True` to see exactly what the tool would send to the UniFi API — without making any changes. The response includes the full payload that would have been submitted.
+
+```python
+# Preview what would be created
+result = await mcp.call_tool("create_network", {
+    "site_id": "default",
+    "name": "IoT Devices",
+    "vlan_id": 20,
+    "dry_run": True
+})
+
+# Apply after reviewing the preview
+result = await mcp.call_tool("create_network", {
+    "site_id": "default",
+    "name": "IoT Devices",
+    "vlan_id": 20,
+    "confirm": True
+})
+```
+
+<Tip>
+  Always use `dry_run=True` first when making configuration changes. Review the payload, then re-run with `confirm=True` to apply.
+</Tip>
+
+## MCP resources vs. MCP tools
+
+In addition to tools, the server exposes **MCP resources** — read-only data endpoints identified by URI. Resources are optimized for bulk data retrieval and are accessed differently from tools, but they serve complementary purposes.
+
+| Resource URI | Returns |
+|---|---|
+| `sites://` | All accessible UniFi sites |
+| `sites://{site_id}/devices` | All devices for a site |
+| `sites://{site_id}/clients` | All active clients for a site |
+| `sites://{site_id}/networks` | All networks for a site |
+| `sites://{site_id}/traffic/flows` | Real-time traffic flows for a site |
+| `site-manager://sites` | Sites from the Site Manager cloud API |
+| `site-manager://health` | Health status from the Site Manager cloud API |
+
+Use **resources** when you want to pull a complete snapshot of data (for example, to feed into a report or analysis). Use **tools** when you need to filter, paginate, search, or take action.
+
+## Read vs. write operations
+
+The pages in this section cover **read operations only** — tools that query your network without making any changes. These are safe to call at any time and do not require `confirm=True`.
+
+<CardGroup cols={2}>
+  <Card title="Device query tools" icon="server" href="/tools/devices">
+    List, search, and inspect UniFi devices.
+  </Card>
+  <Card title="Client query tools" icon="laptop" href="/tools/clients">
+    Query connected and historical clients.
+  </Card>
+  <Card title="Network query tools" icon="network-wired" href="/tools/networks">
+    Inspect network and VLAN configuration.
+  </Card>
+  <Card title="Site query tools" icon="building" href="/tools/sites">
+    List sites and retrieve site statistics.
+  </Card>
+  <Card title="Topology tools" icon="diagram-project" href="/tools/topology">
+    Map device connections and export topology graphs.
+  </Card>
+</CardGroup>

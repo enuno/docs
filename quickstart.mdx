@@ -1,0 +1,134 @@
+---
+title: "Quickstart: install and connect UniFi MCP Server today"
+description: "Install UniFi MCP Server with pip or uvx, set your UniFi API key, and connect it to Claude Desktop or another AI assistant in minutes."
+---
+
+This guide walks you through everything you need to get UniFi MCP Server running and connected to an AI assistant. You'll need a UniFi account at [unifi.ui.com](https://unifi.ui.com) and Python 3.10 or higher installed on your machine.
+
+<Steps>
+  <Step title="Get your UniFi API key">
+    UniFi MCP Server authenticates with the UniFi API using an API key, which you generate from the UniFi Site Manager.
+
+    1. Log in to [unifi.ui.com](https://unifi.ui.com)
+    2. Navigate to **Settings → Control Plane → Integrations**
+    3. Click **Create API Key**
+    4. Copy the key and store it somewhere secure
+
+    <Note>
+      The API key is shown only once. If you navigate away without copying it, you'll need to create a new one.
+    </Note>
+  </Step>
+
+  <Step title="Install the server">
+    Install UniFi MCP Server from PyPI using `pip` or run it directly with `uvx` without a permanent installation.
+
+    **Install with pip (recommended):**
+
+    ```bash
+    pip install unifi-mcp-server
+    ```
+
+    **Run without installing, using uvx:**
+
+    ```bash
+    uvx unifi-mcp-server
+    ```
+
+    After installing with `pip`, the `unifi-mcp-server` command is available globally.
+  </Step>
+
+  <Step title="Set your environment variables">
+    The server reads its configuration from environment variables. At minimum, you need `UNIFI_API_KEY` and `UNIFI_API_TYPE`.
+
+    **For Local Gateway mode (recommended):**
+
+    ```bash
+    UNIFI_API_KEY=your-api-key-here
+    UNIFI_API_TYPE=local
+    UNIFI_LOCAL_HOST=192.168.2.1
+    ```
+
+    Replace `192.168.2.1` with the IP address of your UniFi gateway.
+
+    **For Cloud v1 mode:**
+
+    ```bash
+    UNIFI_API_KEY=your-api-key-here
+    UNIFI_API_TYPE=cloud-v1
+    ```
+
+    You can set these in your shell, in a `.env` file in the project directory, or directly in your MCP client configuration (shown in the next step).
+
+    <Tip>
+      Use Local Gateway mode (`UNIFI_API_TYPE=local`) for full access to all 77 tools, including the ability to create networks, configure firewall rules, and control devices. Cloud API modes are limited to read-only site statistics.
+    </Tip>
+  </Step>
+
+  <Step title="Connect to Claude Desktop">
+    Open your Claude Desktop configuration file and add the UniFi MCP Server entry. The config file is located at:
+
+    - **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+    - **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+
+    **Using pip installation with Local Gateway:**
+
+    ```json
+    {
+      "mcpServers": {
+        "unifi": {
+          "command": "unifi-mcp-server",
+          "env": {
+            "UNIFI_API_KEY": "your-api-key-here",
+            "UNIFI_API_TYPE": "local",
+            "UNIFI_LOCAL_HOST": "192.168.2.1"
+          }
+        }
+      }
+    }
+    ```
+
+    **Using uvx with Cloud v1:**
+
+    ```json
+    {
+      "mcpServers": {
+        "unifi": {
+          "command": "uvx",
+          "args": ["unifi-mcp-server"],
+          "env": {
+            "UNIFI_API_KEY": "your-api-key-here",
+            "UNIFI_API_TYPE": "cloud-v1"
+          }
+        }
+      }
+    }
+    ```
+
+    After saving the file, restart Claude Desktop to load the new server.
+  </Step>
+
+  <Step title="Test with a sample prompt">
+    Once Claude Desktop restarts, open a new conversation and try asking:
+
+    > "List my UniFi devices"
+
+    If the server is connected correctly, Claude will use the `list_devices` tool and return a list of your UniFi devices with their names, models, and status.
+
+    You can also try:
+
+    - "Show me all connected clients on my network"
+    - "What are the current firewall rules on site default?"
+    - "Give me a summary of my UniFi sites"
+  </Step>
+</Steps>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="API modes" icon="network-wired" href="/api-modes">
+    Understand the differences between Local Gateway, Cloud v1, and Cloud EA modes.
+  </Card>
+  <Card title="MCP client setup" icon="plug" href="/clients/claude-desktop">
+    Detailed configuration for Claude Desktop, Cursor, and other clients.
+  </Card>
+</CardGroup>

@@ -1,0 +1,112 @@
+---
+title: "Speed up responses with Redis caching"
+description: "Connect an optional Redis instance to reduce UniFi API calls, stay within rate limits, and improve AI tool response times on large networks."
+---
+
+Every time an AI tool queries your network—listing devices, fetching client statistics, or reading firewall rules—the server makes an HTTP call to the UniFi API. On large networks or under heavy AI workloads, these calls add up and can slow responses or push you toward rate limits. Redis caching sits between the server and the UniFi API, storing recent responses so repeated queries are served from memory instead of the wire.
+
+<Info>
+Redis caching is completely optional. The UniFi MCP Server works without Redis; every tool call simply fetches data directly from the UniFi API. You only need Redis if you want faster responses and fewer API calls.
+</Info>
+
+## When to use caching
+
+Caching is most beneficial when:
+
+- Your network has a large number of devices or clients (50+)
+- Multiple AI sessions are running simultaneously
+- You are using the Cloud Early Access API, which has a 100 requests/minute rate limit
+- Tools that read the same data frequently (device lists, site statistics) are called many times per session
+
+## Configuration variables
+
+Add the following to your `.env` file to enable Redis:
+
+```env
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_DB=0
+# REDIS_PASSWORD=your-password  # Uncomment if Redis requires authentication
+```
+
+| Variable | Description | Default |
+|---|---|---|
+| `REDIS_HOST` | Redis server hostname or IP address | `localhost` |
+| `REDIS_PORT` | Redis server port | `6379` |
+| `REDIS_DB` | Redis database index | `0` |
+| `REDIS_PASSWORD` | Redis password (if authentication is enabled) | None |
+
+If Redis is configured but unavailable when the server starts, caching is automatically disabled for that session and a warning is logged. The server continues to work normally without cache.
+
+## TTL (time-to-live) by resource type
+
+Different resource types have different TTLs based on how frequently they change:
+
+| Resource type | TTL | Rationale |
+|---|---|---|
+| Sites | 5 minutes | Sites change rarely |
+| Networks | 5 minutes | Network config changes rarely |
+| WLANs | 5 minutes | SSID config changes rarely |
+| Firewall rules | 5 minutes | Rules change rarely |
+| Port forwards | 5 minutes | Port forwards change rarely |
+| Devices | 1 minute | Device state changes occasionally |
+| Topology | 1 minute | Topology can shift |
+| DPI statistics | 2 minutes | Stats update frequently |
+| Clients | 30 seconds | Clients connect/disconnect often |
+| Alerts | 30 seconds | Alerts are time-sensitive |
+| Events | 30 seconds | Events are time-sensitive |
+
+## Automatic cache invalidation
+
+When you use a mutating tool—such as `create_network`, `update_wlan`, or `restart_device`—the server automatically invalidates the relevant cache entries for that site. This means you always see current data after making a change, without needing to wait for the TTL to expire.
+
+Webhook events also trigger cache invalidation. When a device goes offline or a client disconnects, the associated cache entries are purged immediately so the next query reflects the real state of your network.
+
+## Docker Compose example with Redis
+
+The recommended way to run the MCP server with Redis is with Docker Compose. Add a Redis service alongside the MCP server:
+
+```yaml
+services:
+  unifi-mcp:
+    image: ghcr.io/enuno/unifi-mcp-server:latest
+    stdin_open: true
+    environment:
+      UNIFI_API_KEY: your-api-key-here
+      UNIFI_API_TYPE: local
+      UNIFI_LOCAL_HOST: 192.168.2.1
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+
+volumes:
+  redis_data:
+```
+
+Start both services with:
+
+```bash
+docker compose up -d
+```
+
+The MCP server connects to Redis using the service name `redis` as the hostname, which Docker Compose resolves automatically.
+
+## Verifying the cache is working
+
+When Redis caching is active, the server logs cache hits and misses at the `DEBUG` level. Set `MCP_LOG_LEVEL=DEBUG` in your environment to see entries like:
+
+```
+DEBUG Cache MISS: devices:default
+DEBUG Cache SET:  devices:default (TTL: 60s)
+DEBUG Cache HIT:  devices:default
+```
+
+A cache miss means the server fetched fresh data from the UniFi API. A cache hit means the response was served from Redis.

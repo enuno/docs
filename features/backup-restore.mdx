@@ -1,0 +1,343 @@
+---
+title: "Automated backups and restore for UniFi"
+description: "Trigger manual backups, configure automated schedules, download and verify backup files with SHA-256 checksums, and restore your UniFi controller safely."
+---
+
+The UniFi MCP Server gives your AI assistant the ability to manage the full backup lifecycle for your UniFi controller—creating backups on demand, scheduling automated runs, downloading backup files with integrity verification, and restoring from a previous backup when needed. Every destructive operation is protected by mandatory confirmation and dry-run preview.
+
+<Warning>
+Restore operations are destructive and will overwrite your current configuration. They may also cause the controller to restart and temporarily disconnect devices. Always use `dry_run=True` to preview a restore, and let the server create a pre-restore backup (enabled by default) so you can roll back if needed.
+</Warning>
+
+## What you can do
+
+<CardGroup cols={2}>
+  <Card title="Manual backups" icon="floppy-disk">
+    Trigger network or full system backups on demand with configurable retention.
+  </Card>
+  <Card title="Automated scheduling" icon="clock">
+    Set up daily, weekly, or monthly backup schedules with custom retention policies.
+  </Card>
+  <Card title="Download and verify" icon="download">
+    Download backup files to local storage with SHA-256 checksum verification.
+  </Card>
+  <Card title="Restore" icon="rotate-left">
+    Restore from any listed backup with automatic pre-restore safety backup.
+  </Card>
+</CardGroup>
+
+## Backup types
+
+UniFi supports two backup types:
+
+| Type | Contents | Typical size | Use case |
+|------|----------|-------------|----------|
+| `network` | Network settings and device configs | Under 10 MB | Regular configuration backups |
+| `system` | Full OS, application, and device configs | 10–100 MB+ | Full disaster recovery |
+
+For most environments, `network` backups are sufficient and faster to create and restore.
+
+## Creating a manual backup
+
+**Example prompts:**
+
+- "Create a backup of the network configuration"
+- "Back up the controller now before I make changes"
+
+<Steps>
+  <Step title="Preview the backup">
+    ```python
+    preview = await mcp.call_tool("trigger_backup", {
+        "site_id": "default",
+        "backup_type": "network",
+        "retention_days": 30,
+        "dry_run": True
+    })
+    ```
+
+    **Response:**
+    ```json
+    {
+      "dry_run": true,
+      "would_create": {
+        "backup_type": "network",
+        "retention_days": 30,
+        "estimated_size": "<10 MB"
+      }
+    }
+    ```
+  </Step>
+  <Step title="Create the backup">
+    ```python
+    result = await mcp.call_tool("trigger_backup", {
+        "site_id": "default",
+        "backup_type": "network",
+        "retention_days": 30,
+        "confirm": True
+    })
+    ```
+
+    **Response:**
+    ```json
+    {
+      "backup_id": "backup_20260422_030000",
+      "filename": "backup_2026-04-22_03-00-00.unf",
+      "download_url": "/data/backup/backup_2026-04-22_03-00-00.unf",
+      "backup_type": "network",
+      "created_at": "2026-04-22T03:00:00",
+      "retention_days": 30,
+      "status": "completed"
+    }
+    ```
+  </Step>
+</Steps>
+
+Pass `retention_days: -1` to keep a backup indefinitely.
+
+## Listing and inspecting backups
+
+**Example prompts:**
+
+- "List all available backups"
+- "Show me details about the backup from April 20th"
+
+```python
+backups = await mcp.call_tool("list_backups", {
+    "site_id": "default"
+})
+```
+
+**Response:**
+```json
+[
+  {
+    "backup_id": "backup_20260422_030000",
+    "filename": "backup_2026-04-22_03-00-00.unf",
+    "backup_type": "NETWORK",
+    "created_at": "2026-04-22T03:00:00Z",
+    "size_bytes": 4096000,
+    "version": "8.5.6",
+    "is_valid": true,
+    "cloud_synced": false
+  }
+]
+```
+
+To see details about a specific backup file:
+
+```python
+details = await mcp.call_tool("get_backup_details", {
+    "site_id": "default",
+    "backup_filename": "backup_2026-04-22_03-00-00.unf"
+})
+```
+
+## Downloading a backup
+
+The `download_backup` tool saves a backup file to your local filesystem and optionally computes a SHA-256 checksum to verify file integrity.
+
+**Example prompt:** "Download the latest backup to /tmp/unifi-backup.unf and verify it"
+
+```python
+result = await mcp.call_tool("download_backup", {
+    "site_id": "default",
+    "backup_filename": "backup_2026-04-22_03-00-00.unf",
+    "output_path": "/tmp/unifi-backup.unf",
+    "verify_checksum": True
+})
+```
+
+**Response:**
+```json
+{
+  "backup_filename": "backup_2026-04-22_03-00-00.unf",
+  "local_path": "/tmp/unifi-backup.unf",
+  "size_bytes": 4096000,
+  "checksum": "a3f5d2c1e9b8074f6d1e2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3",
+  "download_time": "2026-04-22T03:15:00"
+}
+```
+
+Store the checksum value alongside your backup file to verify integrity before a restore.
+
+## Validating a backup
+
+Before restoring, you can validate a backup to check file size, validity flags, and version compatibility.
+
+```python
+validation = await mcp.call_tool("validate_backup", {
+    "site_id": "default",
+    "backup_filename": "backup_2026-04-22_03-00-00.unf"
+})
+```
+
+**Response:**
+```json
+{
+  "backup_filename": "backup_2026-04-22_03-00-00.unf",
+  "is_valid": true,
+  "checksum_valid": true,
+  "format_valid": true,
+  "version_compatible": true,
+  "backup_version": "8.5.6",
+  "warnings": [],
+  "errors": [],
+  "size_bytes": 4096000,
+  "validated_at": "2026-04-22T03:16:00"
+}
+```
+
+## Restoring from a backup
+
+<Warning>
+Restoring from a backup will overwrite your current UniFi configuration. The controller may restart and devices may temporarily disconnect during the restore process (typically 2–5 minutes). This operation requires `confirm=True` and cannot be undone without the pre-restore backup.
+</Warning>
+
+By default, `restore_backup` automatically creates a safety backup of your current configuration before applying the restore. This gives you a rollback point if something goes wrong.
+
+**Example prompt:** "Restore the controller from the backup made on April 20th"
+
+```python
+# Preview first
+preview = await mcp.call_tool("restore_backup", {
+    "site_id": "default",
+    "backup_filename": "backup_2026-04-20_03-00-00.unf",
+    "create_pre_restore_backup": True,
+    "dry_run": True
+})
+```
+
+**Dry-run response:**
+```json
+{
+  "dry_run": true,
+  "would_restore_from": "backup_2026-04-20_03-00-00.unf",
+  "would_create_pre_restore_backup": true,
+  "warning": "Controller will restart during restore"
+}
+```
+
+```python
+# Execute restore
+result = await mcp.call_tool("restore_backup", {
+    "site_id": "default",
+    "backup_filename": "backup_2026-04-20_03-00-00.unf",
+    "create_pre_restore_backup": True,
+    "confirm": True
+})
+```
+
+**Response:**
+```json
+{
+  "backup_filename": "backup_2026-04-20_03-00-00.unf",
+  "status": "restore_initiated",
+  "pre_restore_backup_id": "backup_20260422_031500",
+  "can_rollback": true,
+  "restore_time": "2026-04-22T03:15:00",
+  "warning": "Controller may restart. Devices may temporarily disconnect."
+}
+```
+
+## Scheduling automated backups
+
+The `schedule_backups` tool configures recurring backups on a `daily`, `weekly`, or `monthly` schedule.
+
+**Example prompts:**
+
+- "Schedule daily network backups at 3 AM"
+- "Set up weekly system backups on Sundays at 2 AM with 90-day retention"
+
+<Tabs>
+  <Tab title="Daily backups">
+    ```python
+    result = await mcp.call_tool("schedule_backups", {
+        "site_id": "default",
+        "backup_type": "network",
+        "frequency": "daily",
+        "time_of_day": "03:00",
+        "retention_days": 30,
+        "max_backups": 30,
+        "confirm": True
+    })
+    ```
+  </Tab>
+  <Tab title="Weekly backups">
+    ```python
+    # Weekly on Sundays (day_of_week=6) at 2 AM
+    result = await mcp.call_tool("schedule_backups", {
+        "site_id": "default",
+        "backup_type": "system",
+        "frequency": "weekly",
+        "time_of_day": "02:00",
+        "day_of_week": 6,
+        "retention_days": 90,
+        "max_backups": 12,
+        "cloud_backup_enabled": True,
+        "confirm": True
+    })
+    ```
+  </Tab>
+  <Tab title="Monthly backups">
+    ```python
+    # Monthly on the 1st at midnight
+    result = await mcp.call_tool("schedule_backups", {
+        "site_id": "default",
+        "backup_type": "system",
+        "frequency": "monthly",
+        "time_of_day": "00:00",
+        "day_of_month": 1,
+        "retention_days": 365,
+        "max_backups": 12,
+        "confirm": True
+    })
+    ```
+  </Tab>
+</Tabs>
+
+### Schedule parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `frequency` | string | `daily`, `weekly`, or `monthly` |
+| `time_of_day` | string | 24-hour time in `HH:MM` format |
+| `day_of_week` | integer | 0=Monday, 6=Sunday (required for weekly) |
+| `day_of_month` | integer | 1–31 (required for monthly) |
+| `retention_days` | integer | 1–365 days |
+| `max_backups` | integer | 1–100 backups to retain |
+| `cloud_backup_enabled` | boolean | Sync backups to UniFi cloud |
+
+### View the current schedule
+
+```python
+schedule = await mcp.call_tool("get_backup_schedule", {
+    "site_id": "default"
+})
+```
+
+## Deleting a backup
+
+```python
+result = await mcp.call_tool("delete_backup", {
+    "site_id": "default",
+    "backup_filename": "old_backup_2025-01-01.unf",
+    "confirm": True
+})
+```
+
+<Warning>
+Backup deletion is permanent and cannot be undone. Download the file first if you might need it later.
+</Warning>
+
+## Safety summary
+
+| Operation | Requires `confirm=True` | Supports `dry_run=True` |
+|-----------|------------------------|------------------------|
+| List backups | No | No |
+| Get details | No | No |
+| Validate backup | No | No |
+| Download backup | No | No |
+| Trigger backup | Yes | Yes |
+| Schedule backups | Yes | Yes |
+| Delete backup | Yes | Yes |
+| Restore from backup | Yes | Yes |

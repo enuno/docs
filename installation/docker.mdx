@@ -1,0 +1,197 @@
+---
+title: "Run UniFi MCP Server with Docker"
+description: "Pull and run the UniFi MCP Server as a Docker container. Supports amd64, arm64, and arm/v7. Includes a Docker Compose setup with Redis caching."
+---
+
+The UniFi MCP Server is published as a multi-architecture Docker image on the GitHub Container Registry. You can run it as a standalone container or use Docker Compose to bring up the server alongside Redis for caching. The image supports `linux/amd64`, `linux/arm64`, and `linux/arm/v7` architectures.
+
+## Pull the image
+
+```bash
+docker pull ghcr.io/enuno/unifi-mcp-server:latest
+```
+
+To pull a specific release instead:
+
+```bash
+docker pull ghcr.io/enuno/unifi-mcp-server:0.2.4
+```
+
+## Run as a standalone container
+
+<Warning>
+  Do **not** use the `-d` (detached) flag when connecting the container to an MCP client such as Claude Desktop or Cursor. MCP clients communicate with the server over stdin/stdout and require an interactive session. Use `-i` instead to keep stdin open. The `-d` flag will break the connection.
+</Warning>
+
+### Local gateway mode
+
+Use this when your MCP client needs full access to device management, network configuration, firewall rules, and other write operations. Your machine must have network access to the UniFi gateway.
+
+```bash
+docker run -i --rm \
+  -e UNIFI_API_KEY=your-api-key \
+  -e UNIFI_API_TYPE=local \
+  -e UNIFI_LOCAL_HOST=192.168.2.1 \
+  -e UNIFI_LOCAL_VERIFY_SSL=false \
+  ghcr.io/enuno/unifi-mcp-server:latest
+```
+
+### Cloud API mode
+
+Use this for read-only monitoring via the UniFi Cloud API. Replace `cloud-v1` with `cloud-ea` for the Early Access API.
+
+```bash
+docker run -i --rm \
+  -e UNIFI_API_KEY=your-api-key \
+  -e UNIFI_API_TYPE=cloud-v1 \
+  ghcr.io/enuno/unifi-mcp-server:latest
+```
+
+<Note>
+  Cloud API modes (`cloud-v1` and `cloud-ea`) are limited to aggregate site statistics. They do not support querying individual devices or clients, and cannot make configuration changes. Use `local` mode for full functionality.
+</Note>
+
+## MCP client configuration (Docker)
+
+When configuring an MCP client to launch the container, pass environment variables as individual `-e` arguments. Below is an example for Claude Desktop (`claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "unifi": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-e", "UNIFI_API_KEY=your-api-key",
+        "-e", "UNIFI_API_TYPE=local",
+        "-e", "UNIFI_LOCAL_HOST=192.168.2.1",
+        "-e", "UNIFI_LOCAL_VERIFY_SSL=false",
+        "ghcr.io/enuno/unifi-mcp-server:latest"
+      ]
+    }
+  }
+}
+```
+
+## Docker Compose setup
+
+Docker Compose is the recommended approach for running the server with Redis caching enabled. The configuration below defines two services: the UniFi MCP Server and a Redis instance.
+
+<Steps>
+  <Step title="Create your environment file">
+    Copy the example and fill in your credentials:
+
+    ```bash
+    cp .env.example .env
+    ```
+
+    At minimum, set `UNIFI_API_KEY` and `UNIFI_API_TYPE` in the `.env` file.
+  </Step>
+
+  <Step title="Start the services">
+    ```bash
+    docker compose up
+    ```
+
+    Add `--detach` only if you are running the services for background use and **not** connecting an MCP client directly to this Compose stack.
+  </Step>
+
+  <Step title="Check service status">
+    ```bash
+    docker compose ps
+    ```
+  </Step>
+
+  <Step title="View server logs">
+    ```bash
+    docker compose logs -f unifi-mcp
+    ```
+  </Step>
+
+  <Step title="Stop the services">
+    ```bash
+    docker compose down
+    ```
+  </Step>
+</Steps>
+
+### docker-compose.yml reference
+
+Below is the full Compose file showing all configurable environment variables and their defaults:
+
+```yaml
+version: '3.8'
+
+services:
+  unifi-mcp:
+    image: ghcr.io/enuno/unifi-mcp-server:latest
+    container_name: unifi-mcp-server
+    restart: unless-stopped
+    stdin_open: true   # Required for STDIO transport
+    tty: false
+    environment:
+      UNIFI_API_KEY: ${UNIFI_API_KEY:?UNIFI_API_KEY required}
+      UNIFI_API_TYPE: ${UNIFI_API_TYPE:-cloud-v1}
+      UNIFI_LOCAL_HOST: ${UNIFI_LOCAL_HOST:-}
+      UNIFI_LOCAL_PORT: ${UNIFI_LOCAL_PORT:-443}
+      UNIFI_LOCAL_VERIFY_SSL: ${UNIFI_LOCAL_VERIFY_SSL:-true}
+      UNIFI_DEFAULT_SITE: ${UNIFI_DEFAULT_SITE:-default}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_DB: ${REDIS_DB:-0}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET:-}
+      AGNOST_ENABLED: ${AGNOST_ENABLED:-false}
+      AGNOST_ORG_ID: ${AGNOST_ORG_ID:-}
+    networks:
+      - mcp-network
+    depends_on:
+      - redis
+    volumes:
+      - ./logs:/app/logs
+      - ./audit.log:/app/audit.log
+
+  redis:
+    image: redis:7-alpine
+    container_name: unifi-mcp-redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --appendonly yes
+      --requirepass ${REDIS_PASSWORD:-}
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    networks:
+      - mcp-network
+
+networks:
+  mcp-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+    driver: local
+```
+
+## Multi-architecture support
+
+The published image is built for three architectures. Docker automatically selects the correct variant for your platform when you `docker pull` or `docker run`.
+
+| Architecture | Platform examples |
+|---|---|
+| `linux/amd64` | Most desktop and server x86-64 machines |
+| `linux/arm64` | Apple Silicon Macs, Raspberry Pi 4 (64-bit), AWS Graviton |
+| `linux/arm/v7` | Raspberry Pi 3 and earlier (32-bit ARM) |
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Configure environment variables" icon="sliders" href="/installation/configuration">
+    Full reference for every environment variable the server accepts.
+  </Card>
+  <Card title="Install with pip or uv" icon="python" href="/installation/pip">
+    Prefer a native Python install instead of Docker?
+  </Card>
+</CardGroup>

@@ -1,0 +1,325 @@
+---
+title: "Backup and restore tools reference"
+description: "Trigger on-demand backups, list available backup files, download them locally, configure a schedule, and safely restore your UniFi controller configuration."
+---
+
+Regular backups protect your UniFi configuration against accidental changes, hardware failure, and human error. The backup tools let your AI assistant trigger on-demand backups, list what's available, download files to local storage, and configure recurring backup schedules — all without leaving your conversation.
+
+<Warning>
+  Restore operations are **destructive**. Restoring a backup will overwrite your current controller configuration and may cause a controller restart, temporarily disconnecting managed devices. Always pass `confirm=True` explicitly and consider leaving `create_pre_restore_backup=True` (the default) enabled so you have a rollback point.
+</Warning>
+
+## Tools
+
+### `trigger_backup`
+
+Creates a new backup immediately. The operation completes synchronously and returns the backup filename and a download URL.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="backup_type" type="string" required>
+  The scope of the backup. Accepted values:
+
+  - `network` — network settings and device configurations only. Faster and smaller (typically under 10 MB).
+  - `system` — complete OS, application, and device configurations. Comprehensive but larger (can exceed 100 MB).
+</ParamField>
+
+<ParamField path="retention_days" type="integer">
+  How many days to keep the backup on the controller before automatic deletion. Use `-1` for indefinite retention. Defaults to `30`.
+</ParamField>
+
+<ParamField path="confirm" type="boolean" required>
+  Must be `true` to trigger the backup.
+</ParamField>
+
+<ParamField path="dry_run" type="boolean">
+  When `true`, returns what would be created without actually creating the backup.
+</ParamField>
+
+```json Example response
+{
+  "backup_id": "backup_20251115_030000",
+  "filename": "backup_2025-11-15_03-00-00.unf",
+  "download_url": "/data/backup/backup_2025-11-15_03-00-00.unf",
+  "backup_type": "network",
+  "created_at": "2025-11-15T03:00:05Z",
+  "retention_days": 30,
+  "status": "completed"
+}
+```
+
+---
+
+### `list_backups`
+
+Returns all backup files available on the controller, including filename, size, creation date, type, and whether each backup is valid.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+```json Example response
+[
+  {
+    "backup_id": "backup_20251115_030000",
+    "filename": "backup_2025-11-15_03-00-00.unf",
+    "backup_type": "NETWORK",
+    "created_at": "2025-11-15T03:00:05Z",
+    "size_bytes": 4194304,
+    "version": "8.4.62",
+    "is_valid": true,
+    "cloud_synced": false
+  }
+]
+```
+
+---
+
+### `get_backup_details`
+
+Returns detailed metadata for a single backup file identified by filename.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="backup_filename" type="string" required>
+  The exact filename of the backup (e.g., `"backup_2025-11-15_03-00-00.unf"`).
+</ParamField>
+
+---
+
+### `download_backup`
+
+Downloads a backup file from the controller and saves it to a local path. Optionally calculates a SHA-256 checksum to verify file integrity.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="backup_filename" type="string" required>
+  The exact filename of the backup to download.
+</ParamField>
+
+<ParamField path="output_path" type="string" required>
+  The local filesystem path where the backup should be saved (e.g., `"/backups/unifi_2025-11-15.unf"`). Parent directories are created automatically.
+</ParamField>
+
+<ParamField path="verify_checksum" type="boolean">
+  When `true`, a SHA-256 hash of the downloaded file is calculated and returned. Defaults to `true`.
+</ParamField>
+
+```json Example response
+{
+  "backup_filename": "backup_2025-11-15_03-00-00.unf",
+  "local_path": "/backups/unifi_2025-11-15.unf",
+  "size_bytes": 4194304,
+  "checksum": "a3f5b2c1d4e6f7890abcdef1234567890abcdef1234567890abcdef1234567890",
+  "download_time": "2025-11-15T04:12:00Z"
+}
+```
+
+---
+
+### `delete_backup`
+
+Permanently removes a backup file from the controller. This cannot be undone.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="backup_filename" type="string" required>
+  The exact filename of the backup to delete.
+</ParamField>
+
+<ParamField path="confirm" type="boolean" required>
+  Must be `true` to delete the backup.
+</ParamField>
+
+<ParamField path="dry_run" type="boolean">
+  Preview the deletion without applying it.
+</ParamField>
+
+---
+
+### `restore_backup`
+
+Restores the controller from a backup file. This is a destructive operation — the current configuration will be overwritten.
+
+By default, the tool creates a safety backup of the current state before initiating the restore, giving you a rollback option if anything goes wrong.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="backup_filename" type="string" required>
+  The exact filename of the backup to restore from.
+</ParamField>
+
+<ParamField path="create_pre_restore_backup" type="boolean">
+  When `true` (the default), the tool automatically creates a network backup of the current state before restoring. This backup is retained for 7 days.
+</ParamField>
+
+<ParamField path="confirm" type="boolean" required>
+  Must be `true` to initiate the restore. This is intentionally a hard requirement given the destructive nature of the operation.
+</ParamField>
+
+<ParamField path="dry_run" type="boolean">
+  Preview what the restore would do without initiating it.
+</ParamField>
+
+<Warning>
+  After calling `restore_backup`, the controller may restart. Managed devices may temporarily disconnect during the restart. Expect a connection gap of 2–5 minutes. Do not close your MCP session immediately — wait for the controller to come back online before verifying the result.
+</Warning>
+
+---
+
+### `validate_backup`
+
+Checks a backup file for integrity and reports any warnings or errors before you commit to restoring it.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="backup_filename" type="string" required>
+  The exact filename of the backup to validate.
+</ParamField>
+
+```json Example response
+{
+  "backup_filename": "backup_2025-11-15_03-00-00.unf",
+  "is_valid": true,
+  "checksum_valid": true,
+  "format_valid": true,
+  "version_compatible": true,
+  "backup_version": "8.4.62",
+  "warnings": [],
+  "errors": [],
+  "size_bytes": 4194304,
+  "validated_at": "2025-11-20T10:00:00Z"
+}
+```
+
+---
+
+### `schedule_backups`
+
+Configures a recurring automated backup schedule. Once set, the controller will trigger backups automatically at the specified frequency and time without further intervention.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="backup_type" type="string" required>
+  Scope of scheduled backups: `network` or `system`.
+</ParamField>
+
+<ParamField path="frequency" type="string" required>
+  How often to run. Accepted values: `daily`, `weekly`, `monthly`.
+</ParamField>
+
+<ParamField path="time_of_day" type="string" required>
+  The time to run the backup in 24-hour `HH:MM` format (e.g., `"03:00"` for 3 AM). Schedule during low-traffic hours.
+</ParamField>
+
+<ParamField path="enabled" type="boolean">
+  Whether the schedule is active. Defaults to `true`.
+</ParamField>
+
+<ParamField path="retention_days" type="integer">
+  How long to keep each backup (1–365). Defaults to `30`.
+</ParamField>
+
+<ParamField path="max_backups" type="integer">
+  Maximum number of backups to keep on the controller (1–100). Older backups are deleted when this limit is reached. Defaults to `10`.
+</ParamField>
+
+<ParamField path="day_of_week" type="integer">
+  Required when `frequency` is `weekly`. The day to run: `0` = Monday through `6` = Sunday.
+</ParamField>
+
+<ParamField path="day_of_month" type="integer">
+  Required when `frequency` is `monthly`. The day of the month to run (1–31).
+</ParamField>
+
+<ParamField path="cloud_backup_enabled" type="boolean">
+  When `true`, syncs each completed backup to the UniFi cloud. Requires a linked UniFi account.
+</ParamField>
+
+<ParamField path="confirm" type="boolean" required>
+  Must be `true` to configure the schedule.
+</ParamField>
+
+<ParamField path="dry_run" type="boolean">
+  Preview the schedule configuration without applying it.
+</ParamField>
+
+---
+
+### `get_backup_schedule`
+
+Returns the currently configured automated backup schedule for a site, or indicates that no schedule is set.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+---
+
+## Schedule examples
+
+| Goal | `frequency` | `time_of_day` | Additional params |
+|------|-------------|---------------|-------------------|
+| Daily network backup at 3 AM | `daily` | `"03:00"` | — |
+| Weekly system backup, Sundays at 2 AM | `weekly` | `"02:00"` | `day_of_week=6` |
+| Monthly backup on the 1st at midnight | `monthly` | `"00:00"` | `day_of_month=1` |
+
+---
+
+## Example: safe backup before a config change
+
+This workflow shows the recommended practice of creating a backup, verifying it, making your configuration change, and then cleaning up older backups.
+
+```python
+# Step 1: Create a backup before making changes
+result = trigger_backup(
+    site_id="default",
+    backup_type="network",
+    retention_days=7,
+    confirm=True
+)
+filename = result["filename"]  # e.g., "backup_2025-11-15_10-30-00.unf"
+
+# Step 2: Validate the backup
+validation = validate_backup(site_id="default", backup_filename=filename)
+assert validation["is_valid"], f"Backup invalid: {validation['errors']}"
+
+# Step 3: Download a local copy for extra safety
+download_backup(
+    site_id="default",
+    backup_filename=filename,
+    output_path=f"/backups/{filename}",
+    verify_checksum=True
+)
+
+# ... make your configuration changes here ...
+
+# Step 4: Set up a daily schedule if not already configured
+schedule_backups(
+    site_id="default",
+    backup_type="network",
+    frequency="daily",
+    time_of_day="03:00",
+    retention_days=30,
+    max_backups=10,
+    confirm=True
+)
+```
+
+<Tip>
+  For production environments, use `frequency="daily"` with `cloud_backup_enabled=True`. System backups are heavier but provide full recovery; network backups are sufficient for most configuration-only changes.
+</Tip>

@@ -1,0 +1,306 @@
+---
+title: "Create and manage networks and VLANs"
+description: "Create, update, and delete UniFi networks and VLANs with DHCP configuration, port forwarding rules, and full dry-run safety for every change."
+---
+
+The UniFi MCP Server lets your AI assistant manage the full lifecycle of your network configuration—from creating a new VLAN for IoT devices to updating DHCP ranges and adding port forwarding rules. Every change that modifies your network requires explicit confirmation, and you can preview any operation before it executes using dry-run mode.
+
+<Note>
+Network configuration tools require the **Local Gateway API** (`UNIFI_API_TYPE=local`). Cloud API modes provide read-only access to network information only.
+</Note>
+
+## What you can do
+
+<CardGroup cols={2}>
+  <Card title="List and inspect networks" icon="network-wired">
+    View all networks, VLANs, and subnets with their DHCP configuration.
+  </Card>
+  <Card title="Create networks" icon="plus">
+    Create new networks and VLANs with custom DHCP, subnets, and purposes.
+  </Card>
+  <Card title="Update and delete" icon="pencil">
+    Modify existing network settings or remove networks you no longer need.
+  </Card>
+  <Card title="Port forwarding" icon="arrow-right-arrow-left">
+    Configure external port forwarding rules for internal services.
+  </Card>
+</CardGroup>
+
+## Listing networks and VLANs
+
+**Example prompts:**
+
+- "Show me all VLANs on this site"
+- "What networks are configured?"
+- "What is the DHCP range for the guest network?"
+
+<Tabs>
+  <Tab title="List all VLANs">
+    ```python
+    result = await mcp.call_tool("list_vlans", {
+        "site_id": "default"
+    })
+    ```
+
+    **Response:**
+    ```json
+    [
+      {
+        "id": "507f191e810c19729de860ea",
+        "name": "LAN",
+        "purpose": "corporate",
+        "vlan_id": 1,
+        "ip_subnet": "192.168.1.0/24",
+        "dhcpd_enabled": true
+      },
+      {
+        "id": "507f191e810c19729de860eb",
+        "name": "IoT",
+        "purpose": "corporate",
+        "vlan_id": 20,
+        "ip_subnet": "192.168.20.0/24",
+        "dhcpd_enabled": true
+      }
+    ]
+    ```
+  </Tab>
+  <Tab title="Get network details">
+    ```python
+    result = await mcp.call_tool("get_network_details", {
+        "site_id": "default",
+        "network_id": "507f191e810c19729de860ea"
+    })
+    ```
+  </Tab>
+  <Tab title="Subnet and DHCP info">
+    ```python
+    result = await mcp.call_tool("get_subnet_info", {
+        "site_id": "default",
+        "network_id": "507f191e810c19729de860ea"
+    })
+    ```
+
+    **Response:**
+    ```json
+    {
+      "network_id": "507f191e810c19729de860ea",
+      "name": "LAN",
+      "ip_subnet": "192.168.1.0/24",
+      "vlan_id": 1,
+      "dhcpd_enabled": true,
+      "dhcpd_start": "192.168.1.100",
+      "dhcpd_stop": "192.168.1.254",
+      "dhcpd_leasetime": 86400,
+      "dhcpd_dns_1": "8.8.8.8",
+      "dhcpd_dns_2": "8.8.4.4",
+      "dhcpd_gateway": "192.168.1.1",
+      "domain_name": "local"
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Network usage statistics
+
+Get per-network bandwidth and client counts in one call.
+
+**Example prompt:** "How much bandwidth is each VLAN using right now?"
+
+```python
+result = await mcp.call_tool("get_network_statistics", {
+    "site_id": "default"
+})
+```
+
+**Response:**
+```json
+{
+  "site_id": "default",
+  "networks": [
+    {
+      "network_id": "507f191e810c19729de860ea",
+      "name": "LAN",
+      "vlan_id": 1,
+      "client_count": 15,
+      "total_tx_bytes": 10240000,
+      "total_rx_bytes": 20480000,
+      "total_bytes": 30720000
+    }
+  ]
+}
+```
+
+## Creating a network
+
+Use `create_network` to add a new network or VLAN. Always pass `confirm=True` to execute. Pass `dry_run=True` first to preview the payload that will be sent.
+
+**Example prompts:**
+
+- "Create a VLAN 20 for IoT devices with the subnet 192.168.20.0/24"
+- "Add a new guest network on VLAN 100"
+
+<Warning>
+Creating, updating, or deleting networks requires `confirm=True`. Without it, the tool returns an error. All changes are logged to `audit.log`.
+</Warning>
+
+<Steps>
+  <Step title="Preview the change">
+    ```python
+    preview = await mcp.call_tool("create_network", {
+        "site_id": "default",
+        "name": "IoT Devices",
+        "vlan_id": 20,
+        "subnet": "192.168.20.0/24",
+        "purpose": "corporate",
+        "dhcp_enabled": True,
+        "dry_run": True
+    })
+    ```
+
+    **Response:**
+    ```json
+    {
+      "dry_run": true,
+      "would_create": {
+        "name": "IoT Devices",
+        "vlan_id": 20,
+        "ip_subnet": "192.168.20.0/24",
+        "purpose": "corporate",
+        "dhcpd_enabled": true
+      }
+    }
+    ```
+  </Step>
+  <Step title="Create the network">
+    ```python
+    result = await mcp.call_tool("create_network", {
+        "site_id": "default",
+        "name": "IoT Devices",
+        "vlan_id": 20,
+        "subnet": "192.168.20.0/24",
+        "purpose": "corporate",
+        "dhcp_enabled": True,
+        "confirm": True
+    })
+    ```
+  </Step>
+</Steps>
+
+### Network creation parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `site_id` | string | Site identifier |
+| `name` | string | Network name |
+| `vlan_id` | integer | VLAN ID (1–4094) |
+| `subnet` | string | Subnet in CIDR notation (e.g., `192.168.20.0/24`) |
+| `purpose` | string | `corporate`, `guest`, or `vlan-only` |
+| `dhcp_enabled` | boolean | Enable DHCP server |
+| `confirm` | boolean | Required: must be `true` to execute |
+| `dry_run` | boolean | Preview changes without applying |
+
+## Updating a network
+
+**Example prompt:** "Change the DHCP lease time on the LAN to 48 hours"
+
+```python
+result = await mcp.call_tool("update_network", {
+    "site_id": "default",
+    "network_id": "507f191e810c19729de860ea",
+    "dhcp_lease_time": 172800,
+    "confirm": True
+})
+```
+
+## Deleting a network
+
+**Example prompt:** "Delete the old test VLAN 99"
+
+```python
+# Preview first
+preview = await mcp.call_tool("delete_network", {
+    "site_id": "default",
+    "network_id": "507f191e810c19729de860ec",
+    "dry_run": True
+})
+
+# Execute
+result = await mcp.call_tool("delete_network", {
+    "site_id": "default",
+    "network_id": "507f191e810c19729de860ec",
+    "confirm": True
+})
+```
+
+<Warning>
+Deleting a network removes all associated DHCP leases and may disconnect clients on that VLAN. Use `dry_run=True` to validate before executing.
+</Warning>
+
+## Port forwarding
+
+Port forwarding rules let external traffic reach internal services. You can list, create, and delete rules through the AI assistant.
+
+**Example prompts:**
+
+- "Forward port 8080 from the internet to my web server at 192.168.2.100"
+- "Show all port forwarding rules"
+- "Remove the old Minecraft server port forward"
+
+### List rules
+
+```python
+result = await mcp.call_tool("list_port_forwards", {
+    "site_id": "default"
+})
+```
+
+**Response:**
+```json
+[
+  {
+    "_id": "507f1f77bcf86cd799439011",
+    "name": "Web Server",
+    "dst_port": "80",
+    "fwd": "192.168.2.100",
+    "fwd_port": "8080",
+    "proto": "tcp",
+    "enabled": true
+  }
+]
+```
+
+### Create a port forward
+
+```python
+result = await mcp.call_tool("create_port_forward", {
+    "site_id": "default",
+    "name": "Home Assistant",
+    "dst_port": 8123,
+    "fwd_ip": "192.168.2.50",
+    "fwd_port": 8123,
+    "protocol": "tcp",
+    "confirm": True
+})
+```
+
+### Delete a port forward
+
+```python
+result = await mcp.call_tool("delete_port_forward", {
+    "site_id": "default",
+    "rule_id": "507f1f77bcf86cd799439011",
+    "confirm": True
+})
+```
+
+## Safety mechanisms
+
+| Mechanism | Parameter | Effect |
+|-----------|-----------|--------|
+| Confirmation | `confirm=True` | Required to execute any change |
+| Dry run | `dry_run=True` | Preview the change without executing |
+| Audit log | Automatic | All changes recorded in `audit.log` |
+
+<Tip>
+When asking your AI assistant to make network changes, it will automatically show you a dry-run preview and ask for confirmation before applying anything. This gives you a chance to review every change before it affects your live network.
+</Tip>

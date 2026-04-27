@@ -1,0 +1,283 @@
+---
+title: "Client query tools reference"
+description: "Reference for list_active_clients, get_client_details, get_client_statistics, and search_clients for querying connected and historical UniFi clients."
+---
+
+The client query tools let you inspect devices connected to your UniFi network — both currently active clients and those in the historical record. All four tools are read-only and require only a `site_id` to scope the request. Clients are identified by their MAC address, which remains stable across reconnections and IP address changes.
+
+## `list_active_clients`
+
+Returns all clients currently connected to the site — both wired and wireless. This is equivalent to the "Clients" view in UniFi Network showing active sessions.
+
+```python
+result = await mcp.call_tool("list_active_clients", {
+    "site_id": "default"
+})
+```
+
+### Parameters
+
+<ParamField path="site_id" type="string" required>
+  The site identifier. Use `"default"` for single-site deployments.
+</ParamField>
+
+<ParamField path="limit" type="number" default="100">
+  Maximum number of clients to return.
+</ParamField>
+
+<ParamField path="offset" type="number" default="0">
+  Number of clients to skip before returning results. Use with `limit` for pagination.
+</ParamField>
+
+### Response
+
+Returns an array of client objects for currently connected clients.
+
+<Expandable title="Client object fields">
+  <ResponseField name="mac" type="string">
+    Client MAC address in colon-separated format. This is the stable identifier for a client.
+  </ResponseField>
+  <ResponseField name="hostname" type="string">
+    Network hostname reported by the client, if available.
+  </ResponseField>
+  <ResponseField name="ip" type="string">
+    Current IP address assigned to the client.
+  </ResponseField>
+  <ResponseField name="is_wired" type="boolean">
+    `true` if the client is connected via Ethernet; `false` if connected via WiFi.
+  </ResponseField>
+  <ResponseField name="signal" type="number">
+    WiFi signal strength in dBm. Only present for wireless clients.
+  </ResponseField>
+  <ResponseField name="tx_bytes" type="number">
+    Total bytes transmitted by the client in the current session.
+  </ResponseField>
+  <ResponseField name="rx_bytes" type="number">
+    Total bytes received by the client in the current session.
+  </ResponseField>
+  <ResponseField name="uptime" type="number">
+    Duration of the current connection in seconds.
+  </ResponseField>
+</Expandable>
+
+### Example response
+
+```json
+[
+  {
+    "mac": "aa:bb:cc:dd:ee:01",
+    "hostname": "macbook-pro",
+    "ip": "192.168.2.110",
+    "is_wired": false,
+    "signal": -52,
+    "tx_bytes": 512000000,
+    "rx_bytes": 1024000000,
+    "uptime": 7200
+  }
+]
+```
+
+---
+
+## `get_client_details`
+
+Returns the full record for a single client identified by MAC address. The tool checks active clients first, then falls back to the historical client database if the client is not currently connected.
+
+```python
+result = await mcp.call_tool("get_client_details", {
+    "site_id": "default",
+    "client_mac": "aa:bb:cc:dd:ee:01"
+})
+```
+
+### Parameters
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="client_mac" type="string" required>
+  The client's MAC address. Accepted formats include `aa:bb:cc:dd:ee:ff`, `AA:BB:CC:DD:EE:FF`, and `aabbccddeeff`. The tool normalizes the value before querying.
+</ParamField>
+
+### Response
+
+Returns a single client object. Fields are the same as those in `list_active_clients`. Historical clients may have fewer real-time fields (such as `signal`) populated.
+
+### Example response
+
+```json
+{
+  "mac": "aa:bb:cc:dd:ee:01",
+  "hostname": "laptop-001",
+  "ip": "192.168.2.100",
+  "is_wired": false,
+  "signal": -45,
+  "tx_bytes": 1024000,
+  "rx_bytes": 2048000
+}
+```
+
+<Info>
+  If the MAC address is not found in either the active or historical client list, the tool raises `ResourceNotFoundError`.
+</Info>
+
+---
+
+## `get_client_statistics`
+
+Returns bandwidth usage and connection quality statistics for a specific active client. This tool only succeeds for clients currently connected to the site.
+
+```python
+result = await mcp.call_tool("get_client_statistics", {
+    "site_id": "default",
+    "client_mac": "aa:bb:cc:dd:ee:01"
+})
+```
+
+### Parameters
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="client_mac" type="string" required>
+  The client's MAC address.
+</ParamField>
+
+### Response
+
+<ResponseField name="mac" type="string">
+  The client MAC address that was queried.
+</ResponseField>
+
+<ResponseField name="tx_bytes" type="number">
+  Total bytes transmitted by the client in the current session.
+</ResponseField>
+
+<ResponseField name="rx_bytes" type="number">
+  Total bytes received by the client in the current session.
+</ResponseField>
+
+<ResponseField name="tx_packets" type="number">
+  Total packets transmitted by the client.
+</ResponseField>
+
+<ResponseField name="rx_packets" type="number">
+  Total packets received by the client.
+</ResponseField>
+
+<ResponseField name="tx_rate" type="number">
+  Current transmit rate in Kbps. May be `null` for wired clients.
+</ResponseField>
+
+<ResponseField name="rx_rate" type="number">
+  Current receive rate in Kbps. May be `null` for wired clients.
+</ResponseField>
+
+<ResponseField name="signal" type="number">
+  WiFi signal strength in dBm. `null` for wired clients.
+</ResponseField>
+
+<ResponseField name="rssi" type="number">
+  Received Signal Strength Indicator. `null` for wired clients.
+</ResponseField>
+
+<ResponseField name="noise" type="number">
+  RF noise floor in dBm. `null` for wired clients.
+</ResponseField>
+
+<ResponseField name="uptime" type="number">
+  Current session duration in seconds.
+</ResponseField>
+
+<ResponseField name="is_wired" type="boolean">
+  `true` if the client is connected via Ethernet.
+</ResponseField>
+
+### Example response
+
+```json
+{
+  "mac": "aa:bb:cc:dd:ee:01",
+  "tx_bytes": 1024000,
+  "rx_bytes": 2048000,
+  "tx_packets": 15000,
+  "rx_packets": 20000,
+  "tx_rate": 150000,
+  "rx_rate": 200000,
+  "signal": -45,
+  "rssi": 55,
+  "noise": -90,
+  "uptime": 3600,
+  "is_wired": false
+}
+```
+
+<Note>
+  `get_client_statistics` queries the active client table only. If the client has disconnected, use `get_client_details` instead, which also checks the historical record.
+</Note>
+
+---
+
+## `search_clients`
+
+Searches both active and historical clients on a site by MAC address, IP address, hostname, or display name. Results from both sources are merged, with active client data taking priority when a MAC appears in both.
+
+```python
+result = await mcp.call_tool("search_clients", {
+    "site_id": "default",
+    "query": "laptop"
+})
+```
+
+### Parameters
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="query" type="string" required>
+  The search string. Matched (case-insensitively) against the client's `mac`, `ip`, `hostname`, and `name` fields. Partial matches are returned.
+</ParamField>
+
+<ParamField path="limit" type="number" default="100">
+  Maximum number of results to return.
+</ParamField>
+
+<ParamField path="offset" type="number" default="0">
+  Number of results to skip for pagination.
+</ParamField>
+
+### Response
+
+Returns an array of client objects matching the query. Both currently connected and historical clients may appear in the results.
+
+<CodeGroup>
+
+```python Search by hostname
+result = await mcp.call_tool("search_clients", {
+    "site_id": "default",
+    "query": "macbook"
+})
+```
+
+```python Search by IP
+result = await mcp.call_tool("search_clients", {
+    "site_id": "default",
+    "query": "192.168.2.1"
+})
+```
+
+```python Search by MAC prefix
+result = await mcp.call_tool("search_clients", {
+    "site_id": "default",
+    "query": "aa:bb:cc"
+})
+```
+
+</CodeGroup>
+
+<Tip>
+  `search_clients` queries both active and historical client tables concurrently, so it is the most complete way to find a client regardless of whether it is currently online.
+</Tip>

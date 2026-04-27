@@ -1,0 +1,312 @@
+---
+title: "Manage firewall rules and security policies"
+description: "Create traditional firewall rules, manage Zone-Based Firewall zones, define Layer 3/4 ACLs, and build traffic matching lists through your AI assistant."
+---
+
+The UniFi MCP Server exposes the full firewall and security layer of your UniFi network to your AI assistant. You can create traditional firewall rules, organize networks into security zones with Zone-Based Firewall (ZBF), define Layer 3/4 access control lists, and build traffic matching lists—all through natural language prompts with built-in safety guardrails.
+
+<Warning>
+All firewall and security operations that create, modify, or delete rules require `confirm=True`. Mistakes in firewall rules can disrupt network connectivity. Always use `dry_run=True` to preview changes before applying them.
+</Warning>
+
+## What you can do
+
+<CardGroup cols={2}>
+  <Card title="Traditional firewall rules" icon="shield">
+    Create, update, and delete WAN/LAN firewall rules with full traffic matching.
+  </Card>
+  <Card title="Zone-Based Firewall" icon="hexagon">
+    Group networks into security zones and manage zone membership (Local API only).
+  </Card>
+  <Card title="ACL management" icon="list-check">
+    Define Layer 3/4 access control lists with rule ordering and priority.
+  </Card>
+  <Card title="Traffic matching lists" icon="filter">
+    Build reusable IP, MAC, domain, and port lists for firewall rules.
+  </Card>
+</CardGroup>
+
+## Traditional firewall rules
+
+Traditional firewall rules apply to traffic on specific rulesets: `WAN_IN`, `WAN_OUT`, `LAN_IN`, `LAN_OUT`, and others. You can create rules to accept, drop, or reject traffic based on source/destination IP, protocol, and port.
+
+**Example prompts:**
+
+- "Block all inbound traffic on port 22 from the internet"
+- "Show all firewall rules on the main site"
+- "Create a rule to drop traffic from 10.0.0.0/8 to the IoT VLAN"
+
+### List firewall rules
+
+```python
+result = await mcp.call_tool("list_firewall_rules", {
+    "site_id": "default"
+})
+```
+
+### Create a firewall rule
+
+<Steps>
+  <Step title="Preview with dry run">
+    ```python
+    preview = await mcp.call_tool("create_firewall_rule", {
+        "site_id": "default",
+        "name": "Block Inbound SSH",
+        "action": "drop",
+        "ruleset": "WAN_IN",
+        "protocol": "tcp",
+        "port": 22,
+        "dry_run": True
+    })
+    ```
+
+    **Response:**
+    ```json
+    {
+      "dry_run": true,
+      "would_create": {
+        "name": "Block Inbound SSH",
+        "action": "drop",
+        "ruleset": "WAN_IN",
+        "protocol": "tcp",
+        "dst_port": 22,
+        "enabled": true
+      }
+    }
+    ```
+  </Step>
+  <Step title="Create the rule">
+    ```python
+    result = await mcp.call_tool("create_firewall_rule", {
+        "site_id": "default",
+        "name": "Block Inbound SSH",
+        "action": "drop",
+        "ruleset": "WAN_IN",
+        "protocol": "tcp",
+        "port": 22,
+        "confirm": True
+    })
+    ```
+  </Step>
+</Steps>
+
+### Firewall rule parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `name` | string | Descriptive rule name |
+| `action` | string | `accept`, `drop`, or `reject` |
+| `ruleset` | string | `WAN_IN`, `WAN_OUT`, `LAN_IN`, `LAN_OUT` |
+| `src_address` | string | Source IP or CIDR (optional) |
+| `dst_address` | string | Destination IP or CIDR (optional) |
+| `protocol` | string | `tcp`, `udp`, `icmp`, or `all` |
+| `port` | integer | Destination port number (optional) |
+| `rule_index` | integer | Position in chain (higher = lower priority) |
+| `enabled` | boolean | Enable rule immediately |
+| `confirm` | boolean | Required: must be `true` to execute |
+| `dry_run` | boolean | Preview without applying |
+
+### Update and delete rules
+
+```python
+# Update a rule
+result = await mcp.call_tool("update_firewall_rule", {
+    "site_id": "default",
+    "rule_id": "507f1f77bcf86cd799439011",
+    "enabled": False,
+    "confirm": True
+})
+
+# Delete a rule
+result = await mcp.call_tool("delete_firewall_rule", {
+    "site_id": "default",
+    "rule_id": "507f1f77bcf86cd799439011",
+    "confirm": True
+})
+```
+
+## Zone-Based Firewall (ZBF)
+
+Zone-Based Firewall is a modern approach to network security that groups networks into logical security zones (such as LAN, Guest, IoT, DMZ) and controls traffic based on zone membership rather than individual IP rules. ZBF is available on UniFi Network Application 9.0 and later.
+
+<Note>
+Zone-Based Firewall endpoints are **only available when using the Local Gateway API** (`UNIFI_API_TYPE=local`). These tools return an error if you are using a Cloud API mode. Zone-to-zone traffic policies must be configured in the UniFi Console UI—the API supports zone and network membership management only.
+</Note>
+
+**Example prompts:**
+
+- "Create an IoT security zone and assign VLAN 20 to it"
+- "Show all configured firewall zones"
+- "Add the guest network to the Guest zone"
+
+### List zones
+
+```python
+zones = await mcp.call_tool("list_firewall_zones", {
+    "site_id": "default"
+})
+```
+
+**Response:**
+```json
+[
+  {
+    "id": "zone-lan",
+    "name": "LAN Zone",
+    "description": "Corporate network",
+    "network_ids": ["net-001", "net-002"]
+  },
+  {
+    "id": "zone-iot",
+    "name": "IoT Zone",
+    "description": "Smart home devices",
+    "network_ids": ["net-iot"]
+  }
+]
+```
+
+### Create a zone
+
+```python
+zone = await mcp.call_tool("create_firewall_zone", {
+    "site_id": "default",
+    "name": "IoT",
+    "description": "Internet of Things devices",
+    "network_ids": ["net-iot-001"],
+    "confirm": True
+})
+```
+
+### Assign a network to a zone
+
+```python
+result = await mcp.call_tool("assign_network_to_zone", {
+    "site_id": "default",
+    "zone_id": "zone-iot",
+    "network_id": "net-iot-sensors",
+    "confirm": True
+})
+```
+
+### Remove a network from a zone
+
+```python
+result = await mcp.call_tool("unassign_network_from_zone", {
+    "site_id": "default",
+    "zone_id": "zone-iot",
+    "network_id": "net-old",
+    "confirm": True
+})
+```
+
+### List networks in a zone
+
+```python
+networks = await mcp.call_tool("get_zone_networks", {
+    "site_id": "default",
+    "zone_id": "zone-iot"
+})
+```
+
+### Update or delete a zone
+
+```python
+# Update zone name and description
+result = await mcp.call_tool("update_firewall_zone", {
+    "site_id": "default",
+    "firewall_zone_id": "zone-iot",
+    "name": "IoT and Sensors",
+    "confirm": True
+})
+
+# Delete a zone
+result = await mcp.call_tool("delete_firewall_zone", {
+    "site_id": "default",
+    "zone_id": "zone-old",
+    "confirm": True
+})
+```
+
+<Tip>
+Use dry run before creating or deleting zones to confirm the correct network IDs are being used. Zone names are case-sensitive.
+</Tip>
+
+## ACL management
+
+Layer 3/4 access control lists give you fine-grained control over traffic between network segments. ACLs support rule ordering and priority, making them suitable for complex inter-VLAN policies.
+
+**Example prompts:**
+
+- "Block the IoT VLAN from accessing the corporate LAN"
+- "Allow the management VLAN to reach all other VLANs"
+
+ACL tools follow the same pattern as firewall rules: `list`, `create`, `update`, and `delete`, all requiring `confirm=True` for mutating operations.
+
+## Traffic matching lists
+
+Traffic matching lists let you define reusable collections of IP addresses, MAC addresses, domain names, or port numbers. You can reference these lists in firewall rules instead of hard-coding individual values.
+
+**Supported list types:**
+
+| Type | Example use case |
+|------|-----------------|
+| IP list | Trusted admin IP ranges |
+| MAC list | Known IoT device MACs |
+| Domain list | Social media domains to block |
+| Port list | Common services (HTTP, HTTPS, DNS) |
+
+**Example prompts:**
+
+- "Create an IP list called 'trusted-admins' with these addresses: 192.168.1.10, 192.168.1.11"
+- "Block all traffic to domains in the 'social-media' list"
+
+## Example: blocking IoT devices from reaching the corporate LAN
+
+This walkthrough shows how to isolate IoT devices from the rest of your network.
+
+<Steps>
+  <Step title="Identify the networks">
+    ```python
+    vlans = await mcp.call_tool("list_vlans", {"site_id": "default"})
+    # Find: IoT network ID = "net-iot" (VLAN 20), LAN ID = "net-lan" (VLAN 1)
+    ```
+  </Step>
+  <Step title="Preview the rule">
+    ```python
+    preview = await mcp.call_tool("create_firewall_rule", {
+        "site_id": "default",
+        "name": "Block IoT to LAN",
+        "action": "drop",
+        "ruleset": "LAN_IN",
+        "src_networkconf_id": "net-iot",
+        "dst_networkconf_id": "net-lan",
+        "dry_run": True
+    })
+    ```
+  </Step>
+  <Step title="Apply the rule">
+    ```python
+    result = await mcp.call_tool("create_firewall_rule", {
+        "site_id": "default",
+        "name": "Block IoT to LAN",
+        "action": "drop",
+        "ruleset": "LAN_IN",
+        "src_networkconf_id": "net-iot",
+        "dst_networkconf_id": "net-lan",
+        "confirm": True
+    })
+    ```
+  </Step>
+</Steps>
+
+## Safety summary
+
+| Operation | Requires `confirm=True` | Supports `dry_run=True` |
+|-----------|------------------------|------------------------|
+| List rules/zones | No | No |
+| Create rule | Yes | Yes |
+| Update rule | Yes | Yes |
+| Delete rule | Yes | Yes |
+| Create zone | Yes | Yes |
+| Assign network to zone | Yes | Yes |
+| Delete zone | Yes | Yes |

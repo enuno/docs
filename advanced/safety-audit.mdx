@@ -1,0 +1,108 @@
+---
+title: "Safety controls and audit logging"
+description: "Learn how confirm=True, dry_run=True, and the audit log work together to protect your UniFi network from unintended AI-driven changes."
+---
+
+The UniFi MCP Server is designed with a safety-first philosophy: AI agents can read everything freely, but any operation that modifies your network requires a deliberate, explicit action. Two flags—`confirm` and `dry_run`—are built into every mutating tool. All operations, successful or not, are written to an audit log for accountability and troubleshooting.
+
+## Confirmation required: `confirm=True`
+
+Every tool that creates, updates, or deletes a resource requires you to pass `confirm=True` explicitly. If you omit this flag or pass `confirm=False`, the tool returns a `ConfirmationRequiredError` and makes no changes.
+
+This design prevents an AI agent from accidentally modifying your network in response to an ambiguous prompt. The confirmation flag must be intentional—it cannot be inferred or defaulted.
+
+```python
+# This will raise ConfirmationRequiredError — no changes are made
+result = await mcp.call_tool("create_network", {
+    "site_id": "default",
+    "name": "IoT",
+    "vlan_id": 20,
+    "subnet": "192.168.20.0/24"
+})
+
+# This will execute the change
+result = await mcp.call_tool("create_network", {
+    "site_id": "default",
+    "name": "IoT",
+    "vlan_id": 20,
+    "subnet": "192.168.20.0/24",
+    "confirm": True
+})
+```
+
+## Dry-run preview: `dry_run=True`
+
+Passing `dry_run=True` to any mutating tool shows you exactly what the operation would do—without actually applying any changes. The tool returns a preview of the configuration that would be sent to the UniFi API.
+
+<Tip>
+Always run `dry_run=True` before executing complex or destructive changes. This is especially useful when creating firewall rules, deleting networks, or making bulk configuration updates where a mistake could disrupt connectivity.
+</Tip>
+
+```python
+# Preview the firewall rule that would be created
+preview = await mcp.call_tool("create_firewall_rule", {
+    "site_id": "default",
+    "name": "Block SSH from IoT",
+    "action": "drop",
+    "protocol": "tcp",
+    "port": 22,
+    "source": "192.168.20.0/24",
+    "dry_run": True
+})
+# Returns: {"dry_run": true, "preview": {"name": "Block SSH from IoT", "action": "drop", ...}}
+
+# Apply the change when you are satisfied with the preview
+result = await mcp.call_tool("create_firewall_rule", {
+    "site_id": "default",
+    "name": "Block SSH from IoT",
+    "action": "drop",
+    "protocol": "tcp",
+    "port": 22,
+    "source": "192.168.20.0/24",
+    "confirm": True
+})
+```
+
+You can combine both flags: `dry_run=True` takes precedence over `confirm=True`, so passing both is a safe way to preview.
+
+## Audit logging
+
+Every tool call—reads and writes alike—is appended to `audit.log` in the working directory. The log records the tool name, parameters, outcome, and a timestamp. Sensitive values such as passwords and API keys are automatically masked before writing.
+
+Example `audit.log` entries:
+
+```
+2026-04-22T14:01:03Z INFO  tool=list_devices site_id=default result=success count=12
+2026-04-22T14:01:45Z INFO  tool=create_wlan site_id=default name="Guest WiFi" security=wpapsk password=***MASKED*** vlan_id=100 dry_run=true result=preview
+2026-04-22T14:02:11Z INFO  tool=create_wlan site_id=default name="Guest WiFi" security=wpapsk password=***MASKED*** vlan_id=100 confirm=true result=success wlan_id=507f1f77bcf86cd799439011
+2026-04-22T14:03:00Z WARN  tool=delete_network site_id=default network_id=net-001 confirm=false result=error error=ConfirmationRequiredError
+```
+
+The audit log is append-only and is never truncated by the server. Rotate it externally using a tool like `logrotate` if needed.
+
+## Input validation
+
+All tool parameters are validated using Pydantic models before any API call is made. Validation catches:
+
+- Missing required fields
+- Values outside allowed ranges (for example, VLAN IDs must be between 1 and 4094)
+- Invalid formats (MAC addresses, IP subnets, SSID names)
+- Unsupported enum values (security types, protocol names)
+
+A `ValidationError` is returned with a detailed message describing which parameter failed and why, before any network request is made.
+
+## Password masking
+
+Any tool parameter that appears to contain a credential—including `password`, `api_key`, `secret`, and similar field names—is replaced with `***MASKED***` in all log output, including the audit log and debug logs. The actual value is never written to disk.
+
+This applies to WiFi passwords in `create_wlan` and `update_wlan`, RADIUS secrets, and any other sensitive string fields.
+
+## Summary of safety mechanisms
+
+| Mechanism | What it does |
+|---|---|
+| `confirm=True` | Required on all mutating tools; prevents accidental changes |
+| `dry_run=True` | Returns a preview without applying any changes |
+| Audit log | Appends every operation to `audit.log` with outcome |
+| Input validation | Validates all parameters before making API calls |
+| Password masking | Redacts sensitive values from all log output |

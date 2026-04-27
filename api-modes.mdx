@@ -1,0 +1,139 @@
+---
+title: "UniFi API modes explained: local, cloud-v1, and cloud-ea"
+description: "Compare the three UniFi API connection modes and learn which environment variables to set for Local Gateway, Cloud v1, and Cloud EA access."
+---
+
+UniFi MCP Server can connect to your UniFi infrastructure in three different ways, controlled by the `UNIFI_API_TYPE` environment variable. Each mode uses a different API endpoint, has different capabilities, and suits different use cases.
+
+The mode you choose determines what your AI assistant can do. Local Gateway mode gives full read and write access to your network. The two cloud modes are limited to reading high-level site statistics.
+
+## Comparison
+
+| | Local Gateway | Cloud v1 | Cloud EA |
+|---|---|---|---|
+| **Value** | `local` | `cloud-v1` | `cloud-ea` |
+| **Access** | Local network | Cloud (api.ui.com) | Cloud (api.ui.com) |
+| **Tools available** | All 77 | Read-only statistics | Read-only statistics |
+| **Device management** | Yes | No | No |
+| **Network configuration** | Yes | No | No |
+| **Firewall rules** | Yes | No | No |
+| **Client control** | Yes | No | No |
+| **Site statistics** | Yes | Yes | Yes |
+| **Rate limit** | No hard limit | 10,000 req/min | 100 req/min |
+| **Requires local network** | Yes | No | No |
+
+<Warning>
+  Cloud API modes (both `cloud-v1` and `cloud-ea`) are **read-only**. They can list sites and retrieve aggregate statistics, but cannot modify networks, configure devices, change firewall rules, or perform any other write operations. Use Local Gateway mode for full functionality.
+</Warning>
+
+## Local Gateway
+
+Local Gateway mode connects directly to your UniFi gateway over your local network. This gives the MCP server access to the full UniFi Network API, including all 77 tools.
+
+You need to be on the same network as your gateway, or have a route to it (such as a VPN), for this mode to work.
+
+**When to use it:** Whenever you want to do more than read site statistics — creating networks, configuring WiFi, managing firewall rules, controlling devices, running backups, and so on.
+
+**Configuration:**
+
+```bash
+UNIFI_API_KEY=your-api-key-here
+UNIFI_API_TYPE=local
+UNIFI_LOCAL_HOST=192.168.2.1
+UNIFI_LOCAL_PORT=443
+UNIFI_LOCAL_VERIFY_SSL=false
+```
+
+`UNIFI_LOCAL_HOST` is required when using local mode and must be the IP address or hostname of your UniFi gateway. `UNIFI_LOCAL_PORT` defaults to `443`. `UNIFI_LOCAL_VERIFY_SSL` defaults to `false` because most home gateways use self-signed certificates.
+
+**Example MCP client config:**
+
+```json
+{
+  "mcpServers": {
+    "unifi": {
+      "command": "unifi-mcp-server",
+      "env": {
+        "UNIFI_API_KEY": "your-api-key-here",
+        "UNIFI_API_TYPE": "local",
+        "UNIFI_LOCAL_HOST": "192.168.2.1",
+        "UNIFI_LOCAL_VERIFY_SSL": "false"
+      }
+    }
+  }
+}
+```
+
+## Cloud v1
+
+Cloud v1 connects to the official stable UniFi cloud API at `https://api.ui.com`. It is the more permissive of the two cloud modes, with a rate limit of 10,000 requests per minute. However, it is limited to listing sites and retrieving aggregate statistics such as device counts, client counts, and bandwidth summaries.
+
+**When to use it:** When you need to build a high-level monitoring dashboard across many sites and don't require device-level data or any configuration changes.
+
+**Configuration:**
+
+```bash
+UNIFI_API_KEY=your-api-key-here
+UNIFI_API_TYPE=cloud-v1
+```
+
+You can optionally override the cloud API URL:
+
+```bash
+UNIFI_CLOUD_API_URL=https://api.ui.com
+```
+
+**Example MCP client config:**
+
+```json
+{
+  "mcpServers": {
+    "unifi": {
+      "command": "unifi-mcp-server",
+      "env": {
+        "UNIFI_API_KEY": "your-api-key-here",
+        "UNIFI_API_TYPE": "cloud-v1"
+      }
+    }
+  }
+}
+```
+
+## Cloud EA
+
+Cloud EA connects to the Early Access cloud API, also at `https://api.ui.com`. This is a testing-phase API that Ubiquiti uses to gather feedback before stabilizing features in v1. It has the same read-only limitations as Cloud v1 but a much lower rate limit of 100 requests per minute. The API may change without notice.
+
+**When to use it:** When you are evaluating new UniFi cloud API features or testing integrations against the EA tier. Not recommended for production use.
+
+**Configuration:**
+
+```bash
+UNIFI_API_KEY=your-api-key-here
+UNIFI_API_TYPE=cloud-ea
+```
+
+**Example MCP client config:**
+
+```json
+{
+  "mcpServers": {
+    "unifi": {
+      "command": "unifi-mcp-server",
+      "env": {
+        "UNIFI_API_KEY": "your-api-key-here",
+        "UNIFI_API_TYPE": "cloud-ea"
+      }
+    }
+  }
+}
+```
+
+## Recommendation
+
+Use **Local Gateway** mode for any real network management work. It is the only mode that gives your AI assistant full access to devices, clients, networks, firewall rules, WiFi SSIDs, QoS profiles, and backups.
+
+Cloud modes are useful only when you cannot run the server on a machine with local network access to your gateway, and you only need site-level statistics.
+
+<Info>
+  Your API key is the same across all three modes. The `UNIFI_API_KEY` you generate at [unifi.ui.com](https://unifi.ui.com) works for Local Gateway, Cloud v1, and Cloud EA.
+</Info>

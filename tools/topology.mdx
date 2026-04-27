@@ -1,0 +1,435 @@
+---
+title: "Network topology tools reference"
+description: "Reference for get_network_topology, export_topology, get_device_connections, get_port_mappings, and get_topology_statistics for mapping UniFi network graphs."
+---
+
+The topology tools build a complete map of your UniFi network — every device, every client, and every connection between them. You can retrieve the graph as structured data, export it to standard formats for visualization tools, or drill into the connections of a single device. All topology tools are read-only and derive their data by combining the device list and client list from the UniFi Integration API.
+
+## `get_network_topology`
+
+Retrieves the complete network topology graph for a site. The response includes all adopted devices and connected clients as nodes, all uplink and client connections as edges, and summary statistics about the graph.
+
+```python
+result = await mcp.call_tool("get_network_topology", {
+    "site_id": "default"
+})
+```
+
+### Parameters
+
+<ParamField path="site_id" type="string" required>
+  The site identifier. Use `"default"` for single-site deployments.
+</ParamField>
+
+<ParamField path="include_coordinates" type="boolean" default="false">
+  When `true`, the tool calculates position coordinates for each node, which can be used to lay out a visual diagram. When `false` (the default), coordinates are omitted for a smaller response payload.
+</ParamField>
+
+### Response
+
+<ResponseField name="site_id" type="string">
+  The resolved site identifier used for the query.
+</ResponseField>
+
+<ResponseField name="generated_at" type="string">
+  ISO 8601 timestamp indicating when the topology was captured.
+</ResponseField>
+
+<ResponseField name="nodes" type="object[]">
+  All devices and clients in the topology.
+  <Expandable title="Node object fields">
+    <ResponseField name="node_id" type="string">
+      Unique node identifier (device ID or client ID from the UniFi API).
+    </ResponseField>
+    <ResponseField name="node_type" type="string">
+      `"device"` for UniFi hardware; `"client"` for connected end devices.
+    </ResponseField>
+    <ResponseField name="name" type="string">
+      Display name for the node.
+    </ResponseField>
+    <ResponseField name="mac" type="string">
+      MAC address.
+    </ResponseField>
+    <ResponseField name="ip" type="string">
+      IP address.
+    </ResponseField>
+    <ResponseField name="model" type="string">
+      Device model string. Present for device nodes only.
+    </ResponseField>
+    <ResponseField name="uplink_device_id" type="string">
+      ID of the device this node connects to upstream. `null` for the gateway.
+    </ResponseField>
+    <ResponseField name="uplink_port" type="number">
+      Port index on the upstream device. May be `null` for wireless uplinks.
+    </ResponseField>
+    <ResponseField name="uplink_depth" type="number">
+      Number of hops from the gateway. `0` = directly connected to gateway.
+    </ResponseField>
+    <ResponseField name="state" type="number">
+      `1` = connected/online, `0` = disconnected/offline.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="connections" type="object[]">
+  All edges in the topology graph.
+  <Expandable title="Connection object fields">
+    <ResponseField name="connection_id" type="string">
+      Unique identifier for this connection.
+    </ResponseField>
+    <ResponseField name="source_node_id" type="string">
+      ID of the node at the source end.
+    </ResponseField>
+    <ResponseField name="target_node_id" type="string">
+      ID of the node at the target end.
+    </ResponseField>
+    <ResponseField name="connection_type" type="string">
+      `"uplink"` for device-to-device links; `"wired"` or `"wireless"` for client connections.
+    </ResponseField>
+    <ResponseField name="source_port" type="number">
+      Port index on the source device, if applicable.
+    </ResponseField>
+    <ResponseField name="speed_mbps" type="number">
+      Link speed in Mbps. May be `null` for wireless connections.
+    </ResponseField>
+    <ResponseField name="is_uplink" type="boolean">
+      `true` for device-to-device uplinks; `false` for client connections.
+    </ResponseField>
+    <ResponseField name="status" type="string">
+      `"up"` or `"down"`.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="total_devices" type="number">
+  Count of device nodes in the graph.
+</ResponseField>
+
+<ResponseField name="total_clients" type="number">
+  Count of client nodes in the graph.
+</ResponseField>
+
+<ResponseField name="total_connections" type="number">
+  Count of edges in the graph.
+</ResponseField>
+
+<ResponseField name="max_depth" type="number">
+  Maximum uplink depth across all device nodes. Indicates how many switch hops exist between the furthest device and the gateway.
+</ResponseField>
+
+### Example response (abbreviated)
+
+```json
+{
+  "site_id": "default",
+  "generated_at": "2026-04-22T10:00:00Z",
+  "nodes": [
+    {
+      "node_id": "gw-001",
+      "node_type": "device",
+      "name": "UDM Pro",
+      "mac": "aa:bb:cc:dd:ee:01",
+      "ip": "192.168.1.1",
+      "model": "UDM-Pro",
+      "uplink_device_id": null,
+      "uplink_depth": 0,
+      "state": 1
+    },
+    {
+      "node_id": "sw-001",
+      "node_type": "device",
+      "name": "Core Switch",
+      "mac": "aa:bb:cc:dd:ee:02",
+      "ip": "192.168.1.2",
+      "model": "USW-Pro-24-POE",
+      "uplink_device_id": "gw-001",
+      "uplink_port": 1,
+      "uplink_depth": 1,
+      "state": 1
+    }
+  ],
+  "connections": [
+    {
+      "connection_id": "conn_sw-001_uplink",
+      "source_node_id": "sw-001",
+      "target_node_id": "gw-001",
+      "connection_type": "uplink",
+      "source_port": 1,
+      "speed_mbps": 10000,
+      "is_uplink": true,
+      "status": "up"
+    }
+  ],
+  "total_devices": 8,
+  "total_clients": 34,
+  "total_connections": 42,
+  "max_depth": 2,
+  "has_coordinates": false
+}
+```
+
+---
+
+## `export_topology`
+
+Exports the network topology in a standard graph format as a formatted string. Use this tool when you want to load your topology into an external visualization or analysis tool.
+
+```python
+result = await mcp.call_tool("export_topology", {
+    "site_id": "default",
+    "format": "graphml"
+})
+```
+
+### Parameters
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="format" type="string" required>
+  Export format. One of three values:
+
+  - `"json"` — Full topology as a pretty-printed JSON string. Suitable for programmatic processing or archival.
+  - `"graphml"` — XML-based GraphML format. Import into [Gephi](https://gephi.org/) or yEd for visual network diagrams.
+  - `"dot"` — Graphviz DOT language format. Render with `dot`, `neato`, or other Graphviz tools to produce SVG or PNG diagrams.
+</ParamField>
+
+### Response
+
+Returns the topology data as a plain string in the requested format. The string can be written directly to a file or piped into a visualization tool.
+
+<Tabs>
+  <Tab title="JSON">
+    ```python
+    json_str = await mcp.call_tool("export_topology", {
+        "site_id": "default",
+        "format": "json"
+    })
+    # Write to file
+    with open("topology.json", "w") as f:
+        f.write(json_str)
+    ```
+  </Tab>
+  <Tab title="GraphML (Gephi)">
+    ```python
+    graphml_str = await mcp.call_tool("export_topology", {
+        "site_id": "default",
+        "format": "graphml"
+    })
+    # Save and open in Gephi
+    with open("topology.graphml", "w") as f:
+        f.write(graphml_str)
+    ```
+  </Tab>
+  <Tab title="DOT (Graphviz)">
+    ```python
+    dot_str = await mcp.call_tool("export_topology", {
+        "site_id": "default",
+        "format": "dot"
+    })
+    # Save and render with Graphviz
+    with open("topology.dot", "w") as f:
+        f.write(dot_str)
+    # Then run: dot -Tsvg topology.dot -o topology.svg
+    ```
+  </Tab>
+</Tabs>
+
+### Format comparison
+
+| Format | Best for | Tools |
+|---|---|---|
+| `json` | Programmatic analysis, archival, feeding into dashboards | Python, jq, any JSON parser |
+| `graphml` | Interactive visual exploration, community detection | Gephi, yEd, Cytoscape |
+| `dot` | Static diagrams, documentation, quick rendering | Graphviz (`dot`, `neato`, `fdp`) |
+
+<Warning>
+  If you pass any value other than `"json"`, `"graphml"`, or `"dot"`, the tool raises `ValidationError`. The `format` parameter is case-sensitive.
+</Warning>
+
+---
+
+## `get_device_connections`
+
+Returns only the connection records that involve a specific device, or all connections if no device is specified. Use this tool when you want to understand what a particular switch or access point is connected to without processing the full topology graph.
+
+```python
+result = await mcp.call_tool("get_device_connections", {
+    "site_id": "default",
+    "device_id": "sw-001"
+})
+```
+
+### Parameters
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="device_id" type="string">
+  The device's unique identifier. When provided, only connections where the device appears as either the source or target are returned. When omitted or `null`, all connections in the topology are returned.
+</ParamField>
+
+### Response
+
+Returns an array of connection objects in the same format as the `connections` array in `get_network_topology`.
+
+```json
+[
+  {
+    "connection_id": "conn_sw-001_uplink",
+    "source_node_id": "sw-001",
+    "target_node_id": "gw-001",
+    "connection_type": "uplink",
+    "source_port": 1,
+    "speed_mbps": 10000,
+    "is_uplink": true,
+    "status": "up"
+  },
+  {
+    "connection_id": "conn_client_abc123",
+    "source_node_id": "client-abc123",
+    "target_node_id": "sw-001",
+    "connection_type": "wired",
+    "is_uplink": false,
+    "status": "up"
+  }
+]
+```
+
+---
+
+## `get_port_mappings`
+
+Returns a port-level view of which devices and clients are connected to each physical port on a specific device. This is particularly useful for auditing switch port usage.
+
+```python
+result = await mcp.call_tool("get_port_mappings", {
+    "site_id": "default",
+    "device_id": "sw-001"
+})
+```
+
+### Parameters
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="device_id" type="string" required>
+  The device's unique identifier. Typically a switch — access points and gateways may have fewer connections to map.
+</ParamField>
+
+### Response
+
+<ResponseField name="device_id" type="string">
+  The device that was queried.
+</ResponseField>
+
+<ResponseField name="ports" type="object">
+  A dictionary keyed by port index number. Each value describes what is connected to that port.
+  <Expandable title="Port entry fields">
+    <ResponseField name="connected_to" type="string">
+      Node ID of the device or client connected to this port.
+    </ResponseField>
+    <ResponseField name="connection_type" type="string">
+      `"uplink"`, `"wired"`, or `"wireless"`.
+    </ResponseField>
+    <ResponseField name="speed_mbps" type="number">
+      Negotiated link speed. May be `null` if not reported.
+    </ResponseField>
+    <ResponseField name="status" type="string">
+      `"up"` or `"down"`.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Example response
+
+```json
+{
+  "device_id": "sw-001",
+  "ports": {
+    "1": {
+      "connected_to": "gw-001",
+      "connection_type": "uplink",
+      "speed_mbps": 10000,
+      "status": "up"
+    },
+    "3": {
+      "connected_to": "ap-001",
+      "connection_type": "wired",
+      "speed_mbps": 1000,
+      "status": "up"
+    },
+    "5": {
+      "connected_to": "client-abc123",
+      "connection_type": "wired",
+      "speed_mbps": 1000,
+      "status": "up"
+    }
+  }
+}
+```
+
+---
+
+## `get_topology_statistics`
+
+Returns a lightweight summary of the topology — device count, client count, connection count, and maximum network depth — without transferring the full node and edge data. Use this when you need a quick health check rather than the complete graph.
+
+```python
+result = await mcp.call_tool("get_topology_statistics", {
+    "site_id": "default"
+})
+```
+
+### Parameters
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+### Response
+
+<ResponseField name="site_id" type="string">
+  The site that was queried.
+</ResponseField>
+
+<ResponseField name="total_devices" type="number">
+  Number of adopted devices in the topology.
+</ResponseField>
+
+<ResponseField name="total_clients" type="number">
+  Number of connected clients in the topology.
+</ResponseField>
+
+<ResponseField name="total_connections" type="number">
+  Total number of edges in the topology graph.
+</ResponseField>
+
+<ResponseField name="max_depth" type="number">
+  Maximum uplink depth. A value greater than 2 indicates devices more than two switch hops from the gateway, which may affect latency-sensitive applications.
+</ResponseField>
+
+<ResponseField name="generated_at" type="string">
+  ISO 8601 timestamp of when the underlying topology was captured.
+</ResponseField>
+
+### Example response
+
+```json
+{
+  "site_id": "default",
+  "total_devices": 8,
+  "total_clients": 34,
+  "total_connections": 42,
+  "max_depth": 2,
+  "generated_at": "2026-04-22T10:00:00Z"
+}
+```
+
+<Note>
+  `get_topology_statistics` builds a complete topology internally and then discards the node and edge data, returning only the summary. It makes the same number of API calls as `get_network_topology`, so it is most useful when you only need the summary numbers and want to avoid transmitting large node lists.
+</Note>

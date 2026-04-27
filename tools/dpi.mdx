@@ -1,0 +1,219 @@
+---
+title: "DPI statistics and traffic flow tools reference"
+description: "Inspect application bandwidth usage, per-client traffic breakdowns, and the full list of DPI application categories available across your UniFi sites."
+---
+
+Deep Packet Inspection (DPI) gives you visibility into what applications and services are consuming bandwidth on your network. These tools let your AI assistant answer questions like "which applications are using the most bandwidth today?", "what is this specific client doing?", and "what DPI application categories does UniFi recognize?" — without you needing to log into the console.
+
+## DPI statistics
+
+### `get_dpi_statistics`
+
+Returns a full DPI breakdown for a site: every identified application and category, sorted by total bytes transferred, for the selected time window.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="time_range" type="string">
+  The time window to aggregate statistics over. Accepted values: `1h`, `6h`, `12h`, `24h`, `7d`, `30d`. Defaults to `24h`.
+</ParamField>
+
+```json Example response
+{
+  "site_id": "default",
+  "time_range": "24h",
+  "applications": [
+    {
+      "application": "Netflix",
+      "category": "Streaming",
+      "tx_bytes": 5120000000,
+      "rx_bytes": 10240000000,
+      "total_bytes": 15360000000
+    },
+    {
+      "application": "YouTube",
+      "category": "Streaming",
+      "tx_bytes": 2560000000,
+      "rx_bytes": 7680000000,
+      "total_bytes": 10240000000
+    }
+  ],
+  "categories": [
+    {
+      "category": "Streaming",
+      "tx_bytes": 7680000000,
+      "rx_bytes": 17920000000,
+      "total_bytes": 25600000000,
+      "application_count": 2
+    }
+  ],
+  "total_applications": 18,
+  "total_categories": 6
+}
+```
+
+---
+
+### `list_top_applications`
+
+Returns the top `N` applications by total bytes transferred. This is a convenience wrapper around `get_dpi_statistics` that trims the result for you.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="limit" type="integer">
+  Number of top applications to return. Defaults to `10`.
+</ParamField>
+
+<ParamField path="time_range" type="string">
+  Time window. Accepted values: `1h`, `6h`, `12h`, `24h`, `7d`, `30d`. Defaults to `24h`.
+</ParamField>
+
+```json Example response
+[
+  {
+    "application": "Netflix",
+    "category": "Streaming",
+    "tx_bytes": 5120000000,
+    "rx_bytes": 10240000000,
+    "total_bytes": 15360000000
+  },
+  {
+    "application": "Zoom",
+    "category": "Video Conferencing",
+    "tx_bytes": 1024000000,
+    "rx_bytes": 2048000000,
+    "total_bytes": 3072000000
+  }
+]
+```
+
+---
+
+### `get_client_dpi`
+
+Returns a per-application traffic breakdown for a single client identified by MAC address. Results include each application's upload bytes, download bytes, and percentage share of that client's total traffic.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="client_mac" type="string" required>
+  The client's MAC address (e.g., `"aa:bb:cc:dd:ee:ff"`).
+</ParamField>
+
+<ParamField path="time_range" type="string">
+  Time window. Accepted values: `1h`, `6h`, `12h`, `24h`, `7d`, `30d`. Defaults to `24h`.
+</ParamField>
+
+<ParamField path="limit" type="integer">
+  Maximum number of applications to return.
+</ParamField>
+
+<ParamField path="offset" type="integer">
+  Number of applications to skip (for pagination).
+</ParamField>
+
+```json Example response
+{
+  "site_id": "default",
+  "client_mac": "aa:bb:cc:dd:ee:ff",
+  "time_range": "24h",
+  "total_tx_bytes": 512000000,
+  "total_rx_bytes": 10240000000,
+  "total_bytes": 10752000000,
+  "applications": [
+    {
+      "application": "Netflix",
+      "category": "Streaming",
+      "tx_bytes": 51200000,
+      "rx_bytes": 9216000000,
+      "total_bytes": 9267200000,
+      "percentage": 86.2
+    }
+  ],
+  "total_applications": 5
+}
+```
+
+---
+
+## DPI reference data
+
+These tools return static reference data from UniFi about available DPI categories and applications. They are useful for understanding what application IDs and category names to use when building filters or ACL rules.
+
+### `list_dpi_categories`
+
+Returns all DPI categories recognized by UniFi (e.g., `Streaming`, `Social Media`, `Gaming`, `Video Conferencing`).
+
+No parameters required beyond the server-level settings.
+
+---
+
+### `list_dpi_applications`
+
+Returns all DPI application definitions that UniFi can identify. Each application includes its category and an application ID you can reference in traffic rules.
+
+<ParamField path="limit" type="integer">
+  Maximum number of results to return.
+</ParamField>
+
+<ParamField path="offset" type="integer">
+  Number of results to skip (for pagination).
+</ParamField>
+
+<ParamField path="filter_expr" type="string">
+  A filter expression to narrow the list (e.g., filter by category name).
+</ParamField>
+
+---
+
+## Countries reference
+
+### `list_countries`
+
+Returns the list of countries available for use in UniFi configuration and localization settings.
+
+No parameters required.
+
+---
+
+## Example: finding top bandwidth users
+
+This workflow identifies which applications and clients are consuming the most bandwidth over the past 7 days, then drills into the heaviest-using client.
+
+```python
+# Step 1: Get the top 5 applications site-wide over the past week
+top_apps = list_top_applications(
+    site_id="default",
+    limit=5,
+    time_range="7d"
+)
+
+for app in top_apps:
+    gb = app["total_bytes"] / 1_000_000_000
+    print(f"{app['application']} ({app['category']}): {gb:.1f} GB")
+
+# Step 2: Get the full DPI breakdown to inspect categories
+stats = get_dpi_statistics(site_id="default", time_range="7d")
+print(f"\nTop category: {stats['categories'][0]['category']}")
+
+# Step 3: Drill into a specific high-traffic client
+client_stats = get_client_dpi(
+    site_id="default",
+    client_mac="aa:bb:cc:dd:ee:ff",
+    time_range="7d"
+)
+
+total_gb = client_stats["total_bytes"] / 1_000_000_000
+print(f"\nClient total: {total_gb:.1f} GB")
+
+for app in client_stats["applications"][:3]:
+    print(f"  {app['application']}: {app['percentage']:.1f}%")
+```
+
+<Tip>
+  Combine `list_top_applications` with `get_client_dpi` to answer the question "who is responsible for all this streaming traffic?" — first find the dominant category, then identify which clients are driving it.
+</Tip>

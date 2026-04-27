@@ -1,0 +1,241 @@
+---
+title: "Guest voucher management tools reference"
+description: "Create, list, and delete time-limited hotspot vouchers for guest Wi-Fi access, with optional bandwidth and data quota limits, on your UniFi sites."
+---
+
+Hotspot vouchers are single-use or limited-use access codes you hand to guests so they can connect to your Wi-Fi without sharing your main network password. Each voucher grants access for a fixed duration and can optionally cap bandwidth or total data usage. The tools below let your AI assistant generate, inspect, and clean up vouchers without you touching the UniFi console.
+
+<Note>
+  Voucher management requires the guest portal on your site to be configured with `auth_method` set to `voucher`. See the [RADIUS and guest portal tools reference](/tools/radius) for portal configuration.
+</Note>
+
+## Tools
+
+### `list_vouchers`
+
+Returns all hotspot vouchers for a site. Supports pagination and optional filtering to narrow results by status or expiry.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="limit" type="integer">
+  Maximum number of vouchers to return per request.
+</ParamField>
+
+<ParamField path="offset" type="integer">
+  Number of vouchers to skip, for paginating through large sets.
+</ParamField>
+
+<ParamField path="filter_expr" type="string">
+  A filter expression to narrow results (e.g., filter by note or status).
+</ParamField>
+
+```json Example response
+[
+  {
+    "id": "vchr-abc123",
+    "code": "ABCD-1234",
+    "duration": 3600,
+    "note": "Conference room day pass",
+    "used": false,
+    "created": "2025-11-01T09:00:00Z"
+  }
+]
+```
+
+---
+
+### `get_voucher`
+
+Returns the details of a single voucher by its ID.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="voucher_id" type="string" required>
+  The voucher identifier.
+</ParamField>
+
+---
+
+### `create_vouchers`
+
+Creates one or more vouchers in a single call. All vouchers created in a batch share the same settings.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="count" type="integer" required>
+  How many vouchers to generate. Use `1` for a single code, or a higher number to generate a batch (e.g., for a conference).
+</ParamField>
+
+<ParamField path="duration" type="integer" required>
+  How long each voucher grants access, in **seconds**. For example: `3600` = 1 hour, `86400` = 1 day, `604800` = 7 days.
+</ParamField>
+
+<ParamField path="upload_limit_kbps" type="integer">
+  Upload speed cap per voucher user, in kilobits per second. Omit for unlimited upload.
+</ParamField>
+
+<ParamField path="download_limit_kbps" type="integer">
+  Download speed cap per voucher user, in kilobits per second. Omit for unlimited download.
+</ParamField>
+
+<ParamField path="upload_quota_mb" type="integer">
+  Total upload data allowed before the voucher expires, in megabytes. Omit for unlimited.
+</ParamField>
+
+<ParamField path="download_quota_mb" type="integer">
+  Total download data allowed before the voucher expires, in megabytes. Omit for unlimited.
+</ParamField>
+
+<ParamField path="note" type="string">
+  An administrative label attached to all vouchers in this batch (e.g., `"Staff training day 2025-11-15"`). Helpful for bulk deletion later.
+</ParamField>
+
+<ParamField path="confirm" type="boolean" required>
+  Must be `true` to create the vouchers.
+</ParamField>
+
+<ParamField path="dry_run" type="boolean">
+  When `true`, returns the payload that would be submitted without creating any vouchers.
+</ParamField>
+
+<CodeGroup>
+```json Dry run
+{
+  "site_id": "default",
+  "count": 10,
+  "duration": 28800,
+  "download_limit_kbps": 10000,
+  "upload_limit_kbps": 5000,
+  "note": "All-hands conference 2025-11-20",
+  "confirm": true,
+  "dry_run": true
+}
+```
+
+```json Create vouchers
+{
+  "site_id": "default",
+  "count": 10,
+  "duration": 28800,
+  "download_limit_kbps": 10000,
+  "upload_limit_kbps": 5000,
+  "note": "All-hands conference 2025-11-20",
+  "confirm": true
+}
+```
+</CodeGroup>
+
+```json Example response
+{
+  "success": true,
+  "count": 10,
+  "vouchers": [
+    { "id": "vchr-001", "code": "WXYZ-4321", "duration": 28800 },
+    { "id": "vchr-002", "code": "MNOP-8765", "duration": 28800 }
+  ]
+}
+```
+
+---
+
+### `delete_voucher`
+
+Permanently deletes a single voucher by its ID. If a guest is currently using the voucher, they will lose access.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="voucher_id" type="string" required>
+  The ID of the voucher to delete.
+</ParamField>
+
+<ParamField path="confirm" type="boolean" required>
+  Must be `true` to delete the voucher.
+</ParamField>
+
+<ParamField path="dry_run" type="boolean">
+  Preview the deletion without applying it.
+</ParamField>
+
+---
+
+### `bulk_delete_vouchers`
+
+Deletes all vouchers that match a filter expression. Use this to clean up expired or event-specific batches.
+
+<ParamField path="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField path="filter_expr" type="string" required>
+  A filter expression that selects the vouchers to delete (e.g., filter by `note` to target a specific batch).
+</ParamField>
+
+<ParamField path="confirm" type="boolean" required>
+  Must be `true` to execute the bulk deletion.
+</ParamField>
+
+<ParamField path="dry_run" type="boolean">
+  Preview which vouchers would be deleted without removing them.
+</ParamField>
+
+<Warning>
+  `bulk_delete_vouchers` will remove all vouchers that match the filter — including any that are currently in use. Always use `dry_run=true` first to confirm the scope of deletion.
+</Warning>
+
+---
+
+## Example: generating conference day-pass vouchers
+
+This example generates 25 vouchers for a day-long event, each capped at 20 Mbps download and 5 Mbps upload. After the event, the entire batch is cleaned up.
+
+```python
+# Step 1: Preview the batch
+create_vouchers(
+    site_id="default",
+    count=25,
+    duration=86400,          # 24 hours in seconds
+    download_limit_kbps=20000,
+    upload_limit_kbps=5000,
+    note="Tech Summit 2025-11-20",
+    confirm=True,
+    dry_run=True
+)
+
+# Step 2: Create the vouchers
+result = create_vouchers(
+    site_id="default",
+    count=25,
+    duration=86400,
+    download_limit_kbps=20000,
+    upload_limit_kbps=5000,
+    note="Tech Summit 2025-11-20",
+    confirm=True
+)
+
+# Step 3: After the event, clean up (dry run first)
+bulk_delete_vouchers(
+    site_id="default",
+    filter_expr="note:Tech Summit 2025-11-20",
+    confirm=True,
+    dry_run=True
+)
+
+# Step 4: Confirm and execute the cleanup
+bulk_delete_vouchers(
+    site_id="default",
+    filter_expr="note:Tech Summit 2025-11-20",
+    confirm=True
+)
+```
+
+<Tip>
+  Always attach a descriptive `note` when creating event-specific batches. It makes filtering and bulk deletion much easier when the event ends.
+</Tip>

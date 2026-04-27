@@ -1,0 +1,338 @@
+---
+title: "Switch port profile tools reference"
+description: "Reference for UniFi MCP tools that list, create, update, delete, and apply switch port profiles, covering PoE, VLANs, 802.1X, and LLDP-MED."
+---
+
+Switch port profiles define a reusable configuration template that you can apply to one or more physical switch ports. A profile encodes the forwarding mode, native VLAN, tagged VLANs, PoE delivery mode, port speed, 802.1X authentication behaviour, and LLDP-MED advertisement settings. Once you create a profile, you apply it to specific ports using `set_device_port_overrides`, which lets you roll out consistent configuration across many switches without touching each port individually.
+
+## Tools
+
+### `list_port_profiles`
+
+Returns all switch port profiles configured in the site. This is a read-only operation.
+
+<ParamField body="site_id" type="string" required>
+  The site identifier to query.
+</ParamField>
+
+<ParamField body="limit" type="integer">
+  Maximum number of profiles to return.
+</ParamField>
+
+<ParamField body="offset" type="integer">
+  Number of profiles to skip, for pagination.
+</ParamField>
+
+```python
+profiles = await mcp.call_tool("list_port_profiles", {
+    "site_id": "default",
+})
+```
+
+---
+
+### `create_port_profile`
+
+Creates a new switch port profile. You must supply a name and a forwarding mode. All other parameters are optional and give you control over VLAN assignment, PoE, link speed, 802.1X, and LLDP-MED.
+
+<Warning>
+  Requires `confirm=True`. Profile names must be unique within a site — the tool raises `DuplicateResourceError` if a profile with the same name already exists.
+</Warning>
+
+<ParamField body="site_id" type="string" required>
+  The site identifier where the profile will be created.
+</ParamField>
+
+<ParamField body="name" type="string" required>
+  A unique, descriptive name for the profile (e.g. `"IP Camera"`).
+</ParamField>
+
+<ParamField body="forward" type="string" required>
+  How the port forwards traffic. Accepted values:
+  - `all` — forward all VLANs (trunk)
+  - `native` — forward native VLAN only (access port)
+  - `customize` — forward the native VLAN plus any tagged VLANs you specify
+  - `disabled` — disable the port
+</ParamField>
+
+<ParamField body="native_networkconf_id" type="string">
+  The internal ID of the network configuration to use as the native (untagged) VLAN on this port. Use `get_network_details` or `list_vlans` to find valid IDs.
+</ParamField>
+
+<ParamField body="tagged_networkconf_ids" type="array">
+  List of network configuration IDs whose traffic should be tagged on this port. Only meaningful when `forward` is `customize`.
+</ParamField>
+
+<ParamField body="excluded_networkconf_ids" type="array">
+  List of network configuration IDs to explicitly exclude when `forward` is `all`.
+</ParamField>
+
+<ParamField body="poe_mode" type="string">
+  Power over Ethernet delivery mode. Accepted values: `auto`, `off`, `pasv24`, `passthrough`. Use `auto` for standard IEEE 802.3at/af PoE. Use `pasv24` for passive 24 V PoE (legacy Ubiquiti devices). Defaults to the switch's global PoE setting when omitted.
+</ParamField>
+
+<ParamField body="speed" type="integer">
+  Fixed port speed in Mbps (e.g. `100`, `1000`). When omitted, the port auto-negotiates.
+</ParamField>
+
+<ParamField body="full_duplex" type="boolean">
+  Force full-duplex mode. Only relevant when `speed` is also set and `autoneg` is `false`.
+</ParamField>
+
+<ParamField body="autoneg" type="boolean">
+  Enable link auto-negotiation. Set to `false` to lock speed and duplex manually.
+</ParamField>
+
+<ParamField body="dot1x_ctrl" type="string">
+  802.1X port access control mode. Accepted values: `auto`, `force_authorized`, `force_unauthorized`, `mac_based`. Use `auto` for standard 802.1X supplicant authentication. Use `mac_based` for MAB (MAC Authentication Bypass) on devices that do not support 802.1X.
+</ParamField>
+
+<ParamField body="lldpmed_enabled" type="boolean">
+  Enable LLDP-MED (Media Endpoint Discovery) advertisements on this port. Useful for VoIP phones that use LLDP-MED to discover their voice VLAN.
+</ParamField>
+
+<ParamField body="confirm" type="boolean" required>
+  Must be `true` to create the profile.
+</ParamField>
+
+<ParamField body="dry_run" type="boolean">
+  When `true`, checks for duplicate names, validates parameters, and returns the payload that would be submitted without creating anything.
+</ParamField>
+
+**Example: creating an IP camera port profile with PoE and a dedicated VLAN**
+
+<CodeGroup>
+
+```python dry run
+result = await mcp.call_tool("create_port_profile", {
+    "site_id": "default",
+    "name": "IP Camera",
+    "forward": "native",
+    "native_networkconf_id": "507f191e810c19729de860ea",
+    "poe_mode": "auto",
+    "dry_run": True,
+    "confirm": True,
+})
+# {"dry_run": true, "would_create": {...}}
+```
+
+```python execute
+result = await mcp.call_tool("create_port_profile", {
+    "site_id": "default",
+    "name": "IP Camera",
+    "forward": "native",
+    "native_networkconf_id": "507f191e810c19729de860ea",
+    "poe_mode": "auto",
+    "confirm": True,
+})
+```
+
+</CodeGroup>
+
+**Example: VoIP phone profile with LLDP-MED and voice VLAN tagging**
+
+```python
+result = await mcp.call_tool("create_port_profile", {
+    "site_id": "default",
+    "name": "VoIP Phone",
+    "forward": "customize",
+    "native_networkconf_id": "data-vlan-network-id",
+    "tagged_networkconf_ids": ["voice-vlan-network-id"],
+    "lldpmed_enabled": True,
+    "confirm": True,
+})
+```
+
+<Tip>
+  For 802.1X deployments, set `dot1x_ctrl` to `"auto"` for devices that support the protocol (laptops, managed phones) and `"mac_based"` for printers or cameras that do not. Create separate profiles for each class of device.
+</Tip>
+
+---
+
+### `update_port_profile`
+
+Modifies an existing port profile using a fetch-then-merge strategy. Only the fields you provide are changed; the rest of the profile is left as-is.
+
+<ParamField body="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField body="profile_id" type="string" required>
+  The internal ID of the profile to update. Use `list_port_profiles` to find this value.
+</ParamField>
+
+<ParamField body="name" type="string">
+  New profile name.
+</ParamField>
+
+<ParamField body="forward" type="string">
+  New forwarding mode: `all`, `native`, `customize`, or `disabled`.
+</ParamField>
+
+<ParamField body="native_networkconf_id" type="string">
+  New native VLAN network configuration ID.
+</ParamField>
+
+<ParamField body="tagged_networkconf_ids" type="array">
+  New list of tagged VLAN network configuration IDs.
+</ParamField>
+
+<ParamField body="excluded_networkconf_ids" type="array">
+  New list of excluded network configuration IDs.
+</ParamField>
+
+<ParamField body="poe_mode" type="string">
+  New PoE mode: `auto`, `off`, `pasv24`, or `passthrough`.
+</ParamField>
+
+<ParamField body="speed" type="integer">
+  New fixed port speed in Mbps.
+</ParamField>
+
+<ParamField body="full_duplex" type="boolean">
+  New full-duplex setting.
+</ParamField>
+
+<ParamField body="autoneg" type="boolean">
+  New auto-negotiation setting.
+</ParamField>
+
+<ParamField body="dot1x_ctrl" type="string">
+  New 802.1X control mode.
+</ParamField>
+
+<ParamField body="lldpmed_enabled" type="boolean">
+  Enable or disable LLDP-MED.
+</ParamField>
+
+<ParamField body="confirm" type="boolean" required>
+  Must be `true` to apply changes.
+</ParamField>
+
+<ParamField body="dry_run" type="boolean">
+  When `true`, returns a preview without writing changes.
+</ParamField>
+
+```python
+result = await mcp.call_tool("update_port_profile", {
+    "site_id": "default",
+    "profile_id": "507f1f77bcf86cd799439011",
+    "poe_mode": "off",
+    "confirm": True,
+})
+```
+
+<Note>
+  Updating a profile immediately affects all switch ports that currently use it. If you need to test a change on a single port first, create a new profile with your modified settings, apply it to a test port using `set_device_port_overrides`, and promote the change to the main profile once verified.
+</Note>
+
+---
+
+### `delete_port_profile`
+
+Permanently removes a port profile. The tool verifies the profile exists before deleting it and raises `ResourceNotFoundError` if the ID cannot be found.
+
+<Warning>
+  Deleting a profile that is currently applied to switch ports will leave those ports without a custom profile, reverting them to the switch's default configuration. Use `list_port_profiles` and review port assignments before deleting.
+</Warning>
+
+<ParamField body="site_id" type="string" required>
+  The site identifier.
+</ParamField>
+
+<ParamField body="profile_id" type="string" required>
+  The internal ID of the profile to delete.
+</ParamField>
+
+<ParamField body="confirm" type="boolean" required>
+  Must be `true` to delete the profile.
+</ParamField>
+
+<ParamField body="dry_run" type="boolean">
+  When `true`, confirms the profile exists and returns a preview without deleting.
+</ParamField>
+
+```python
+result = await mcp.call_tool("delete_port_profile", {
+    "site_id": "default",
+    "profile_id": "507f1f77bcf86cd799439011",
+    "confirm": True,
+})
+# {"success": true, "deleted_profile_id": "507f1f77bcf86cd799439011"}
+```
+
+---
+
+### `set_device_port_overrides`
+
+Applies one or more port profile assignments to the physical ports of a specific switch. Each entry in `port_overrides` must specify the port index (`port_idx`) and the profile to apply (`portconf_id`). By default the tool merges your changes with existing overrides — only the ports you specify are changed, and all other port assignments are left intact.
+
+<Warning>
+  Requires `confirm=True`. This tool writes directly to the device configuration. Assigning an incompatible profile (for example, a PoE profile to a non-PoE port) may cause the port to behave unexpectedly.
+</Warning>
+
+<ParamField body="site_id" type="string" required>
+  The site identifier where the device lives.
+</ParamField>
+
+<ParamField body="device_id" type="string" required>
+  The internal ID or MAC address of the switch to configure.
+</ParamField>
+
+<ParamField body="port_overrides" type="array" required>
+  List of port override objects. Each object must contain:
+  - `port_idx` (integer) — the physical port number (1-indexed)
+  - `portconf_id` (string) — the ID of the profile to apply
+
+  Additional fields such as `name` or `poe_mode` may also be included to override individual settings at the port level.
+</ParamField>
+
+<ParamField body="merge" type="boolean">
+  When `true` (the default), existing port overrides are fetched and merged with your input — ports you do not mention are left unchanged. Set to `false` to replace all port overrides with exactly the list you provide.
+</ParamField>
+
+<ParamField body="confirm" type="boolean" required>
+  Must be `true` to apply the changes.
+</ParamField>
+
+<ParamField body="dry_run" type="boolean">
+  When `true`, computes the final merged override list and returns it for review without writing to the device.
+</ParamField>
+
+**Example: applying the "IP Camera" profile to ports 3 and 4 on a switch**
+
+<CodeGroup>
+
+```python dry run
+result = await mcp.call_tool("set_device_port_overrides", {
+    "site_id": "default",
+    "device_id": "507f1f77bcf86cd799439011",
+    "port_overrides": [
+        {"port_idx": 3, "portconf_id": "camera-profile-id"},
+        {"port_idx": 4, "portconf_id": "camera-profile-id"},
+    ],
+    "merge": True,
+    "dry_run": True,
+    "confirm": True,
+})
+# {"dry_run": true, "would_set_overrides": [...], "merge": true}
+```
+
+```python execute
+result = await mcp.call_tool("set_device_port_overrides", {
+    "site_id": "default",
+    "device_id": "507f1f77bcf86cd799439011",
+    "port_overrides": [
+        {"port_idx": 3, "portconf_id": "camera-profile-id"},
+        {"port_idx": 4, "portconf_id": "camera-profile-id"},
+    ],
+    "merge": True,
+    "confirm": True,
+})
+```
+
+</CodeGroup>
+
+<Tip>
+  Use `get_device_port_overrides` (a read-only tool) to inspect the current port assignments on a device before applying changes. This helps you identify port indices and avoid overwriting overrides you want to keep.
+</Tip>

@@ -1,0 +1,124 @@
+---
+title: "Connect to any MCP-compatible client"
+description: "Use the UniFi MCP Server with Windsurf, Continue.dev, or any MCP-compatible client. Includes generic stdio config patterns and environment variable reference."
+---
+
+The UniFi MCP Server uses the standard **stdio transport** defined by the Model Context Protocol. This means it works with any MCP-compatible client: the server process starts when your client needs it, communicates over stdin and stdout, and exits when the session ends. If your client supports MCP and stdio transport, you can connect it to your UniFi network with a few lines of JSON.
+
+## How stdio transport works
+
+When an MCP client launches the UniFi MCP Server, it starts the process and holds the connection open. The client sends requests by writing to the process's stdin, and reads responses from stdout. There is no separate server to keep running, no network port to open, and no daemon to manage—the lifecycle of the server process is tied entirely to the client session.
+
+## Generic configuration pattern
+
+Most MCP clients accept a JSON configuration block in this shape:
+
+```json
+{
+  "mcpServers": {
+    "unifi": {
+      "command": "unifi-mcp-server",
+      "env": {
+        "UNIFI_API_KEY": "your-api-key-here",
+        "UNIFI_API_TYPE": "local",
+        "UNIFI_LOCAL_HOST": "192.168.2.1"
+      }
+    }
+  }
+}
+```
+
+This assumes you have already installed the package from PyPI:
+
+```bash
+pip install unifi-mcp-server
+```
+
+## Running without installation using uvx
+
+If you have `uv` installed, you can use `uvx` to run the server directly from PyPI without a prior installation step. Replace `"command": "unifi-mcp-server"` with:
+
+```json
+{
+  "mcpServers": {
+    "unifi": {
+      "command": "uvx",
+      "args": ["unifi-mcp-server"],
+      "env": {
+        "UNIFI_API_KEY": "your-api-key-here",
+        "UNIFI_API_TYPE": "local",
+        "UNIFI_LOCAL_HOST": "192.168.2.1"
+      }
+    }
+  }
+}
+```
+
+`uvx` handles downloading and caching the package on first run, then uses the cached version on subsequent runs.
+
+## Environment variables
+
+These variables apply to every client. Set them in the `env` block of your client's config.
+
+### Required
+
+| Variable | Description |
+|---|---|
+| `UNIFI_API_KEY` | Your UniFi API key, obtained from **Settings → Control Plane → Integrations** at unifi.ui.com |
+| `UNIFI_API_TYPE` | API mode: `local` for full access via your gateway, `cloud-v1` or `cloud-ea` for cloud-only statistics |
+
+### Local gateway API
+
+These are required when `UNIFI_API_TYPE=local`:
+
+| Variable | Default | Description |
+|---|---|---|
+| `UNIFI_LOCAL_HOST` | — | IP address of your UniFi gateway (e.g., `192.168.2.1`) |
+| `UNIFI_LOCAL_PORT` | `443` | HTTPS port of your gateway |
+| `UNIFI_LOCAL_VERIFY_SSL` | `false` | Whether to verify the gateway's TLS certificate |
+
+### Cloud API
+
+These apply when `UNIFI_API_TYPE` is `cloud-v1` or `cloud-ea`:
+
+| Variable | Default | Description |
+|---|---|---|
+| `UNIFI_CLOUD_API_URL` | `https://api.ui.com` | Cloud API base URL |
+| `UNIFI_DEFAULT_SITE` | `default` | Default site ID used when none is specified in a tool call |
+
+### Optional
+
+| Variable | Description |
+|---|---|
+| `REDIS_HOST` | Redis hostname for caching (improves performance) |
+| `REDIS_PORT` | Redis port (default: `6379`) |
+| `REDIS_DB` | Redis database index (default: `0`) |
+| `WEBHOOK_SECRET` | HMAC secret for validating incoming UniFi webhook events |
+
+## Client-specific notes
+
+### Windsurf
+
+Windsurf uses a `mcp_config.json` file and follows the same `mcpServers` structure as the generic pattern above. Open **Windsurf Settings → MCP** to find the config file path on your system.
+
+### Continue.dev
+
+Continue supports MCP servers through its `config.json` file. Add a `mcpServers` entry using the same JSON structure. Refer to the Continue documentation for the exact file path on your platform.
+
+### Other emerging clients
+
+Any client that implements the MCP specification and supports stdio transport will work. Look for an MCP server configuration section in the client's settings and paste in the generic JSON pattern above, adjusting the `env` values for your environment.
+
+## MCP Registry
+
+The UniFi MCP Server is listed in the MCP Registry under the identifier:
+
+```
+io.github.enuno/unifi-mcp-server
+```
+
+Some MCP clients can browse or search the registry directly. You can also look it up at [registry.modelcontextprotocol.io](https://registry.modelcontextprotocol.io) by searching for `io.github.enuno/unifi-mcp-server`.
+
+<Tip>
+  Use `UNIFI_API_TYPE=local` for full functionality. Cloud API modes (`cloud-v1`, `cloud-ea`) only expose aggregate site statistics and do not support device management, network configuration, or any write operations.
+</Tip>

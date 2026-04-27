@@ -1,0 +1,199 @@
+---
+title: "Configure UniFi MCP Server environment variables"
+description: "Full reference for every environment variable the UniFi MCP Server accepts: required API keys, mode settings, Redis caching, webhooks, and performance tracking."
+---
+
+The UniFi MCP Server is configured entirely through environment variables. You can set these in a `.env` file in the directory where you run the server, pass them directly to `docker run`, or define them inside your MCP client's server configuration block. This page documents every variable the server accepts, their defaults, and when you need each one.
+
+## Obtaining your API key
+
+Before you configure anything else, you need a UniFi API key.
+
+<Steps>
+  <Step title="Log in to UniFi Site Manager">
+    Go to [unifi.ui.com](https://unifi.ui.com) and sign in to your account.
+  </Step>
+  <Step title="Open Integrations">
+    Navigate to **Settings → Control Plane → Integrations**.
+  </Step>
+  <Step title="Create an API key">
+    Click **Create API Key** and give it a descriptive name.
+  </Step>
+  <Step title="Save the key immediately">
+    The key is shown only once. Copy it and store it in a secure location before closing the dialog.
+  </Step>
+</Steps>
+
+## Complete .env example
+
+Copy the block below into a `.env` file and fill in the values for your environment. Lines beginning with `#` are comments and can be left as-is or removed.
+
+```env
+# ── Required ────────────────────────────────────────────────────────────────
+UNIFI_API_KEY=your-api-key-here
+
+# API mode: local | cloud-v1 | cloud-ea
+# Use 'local' for full functionality. Cloud modes are limited to statistics.
+UNIFI_API_TYPE=local
+
+# ── Local gateway (required when UNIFI_API_TYPE=local) ───────────────────
+UNIFI_LOCAL_HOST=192.168.2.1
+UNIFI_LOCAL_PORT=443
+UNIFI_LOCAL_VERIFY_SSL=false
+
+# ── Cloud API (required when UNIFI_API_TYPE=cloud-v1 or cloud-ea) ─────────
+# UNIFI_CLOUD_API_URL=https://api.ui.com
+# UNIFI_DEFAULT_SITE=default
+
+# ── Redis caching (optional) ─────────────────────────────────────────────
+# REDIS_HOST=localhost
+# REDIS_PORT=6379
+# REDIS_DB=0
+# REDIS_PASSWORD=
+
+# ── Webhook support (optional) ───────────────────────────────────────────
+# WEBHOOK_SECRET=your-webhook-secret-here
+
+# ── Performance tracking with agnost.ai (optional) ───────────────────────
+# AGNOST_ENABLED=true
+# AGNOST_ORG_ID=your-organization-id-here
+# AGNOST_ENDPOINT=https://api.agnost.ai
+# AGNOST_DISABLE_INPUT=false
+# AGNOST_DISABLE_OUTPUT=false
+```
+
+---
+
+## Required variables
+
+<ParamField path="env.UNIFI_API_KEY" type="string" required>
+  Your UniFi API key, obtained from **Settings → Control Plane → Integrations** in the UniFi Site Manager. This key is sent as the `X-API-Key` HTTP header on every request.
+</ParamField>
+
+<ParamField path="env.UNIFI_API_TYPE" type="string" required>
+  Selects which API the server connects to. Accepted values:
+
+  - `local` — Direct access to your UniFi gateway over your local network. Provides full read/write access to all features. **Recommended.**
+  - `cloud-v1` — UniFi stable v1 Cloud API. Limited to aggregate site statistics. Rate limit: 10,000 requests/minute.
+  - `cloud-ea` — UniFi Early Access Cloud API. Limited to aggregate site statistics. Rate limit: 100 requests/minute.
+</ParamField>
+
+---
+
+## Local gateway variables
+
+These variables are required when `UNIFI_API_TYPE=local`. They tell the server how to reach your UniFi gateway on the local network.
+
+<ParamField path="env.UNIFI_LOCAL_HOST" type="string" required>
+  The IP address or hostname of your UniFi gateway. Example: `192.168.2.1`. This variable is required when using `local` mode — the server will refuse to start without it.
+</ParamField>
+
+<ParamField path="env.UNIFI_LOCAL_PORT" type="number" default="443">
+  The HTTPS port your UniFi gateway listens on. The default is `443` for most UniFi gateways. Must be between 1 and 65535.
+</ParamField>
+
+<ParamField path="env.UNIFI_LOCAL_VERIFY_SSL" type="boolean" default="true">
+  Whether to verify the gateway's SSL certificate. UniFi gateways use self-signed certificates by default, so set this to `false` unless you have installed a trusted certificate on your gateway.
+</ParamField>
+
+---
+
+## Cloud API variables
+
+These variables apply when `UNIFI_API_TYPE=cloud-v1` or `UNIFI_API_TYPE=cloud-ea`.
+
+<ParamField path="env.UNIFI_CLOUD_API_URL" type="string" default="https://api.ui.com">
+  The base URL for the UniFi Cloud API. You should not need to change this unless Ubiquiti publishes a new endpoint.
+</ParamField>
+
+<ParamField path="env.UNIFI_DEFAULT_SITE" type="string" default="default">
+  The site ID to use when no site is specified in a tool call. For most single-site setups, leave this as `default`.
+</ParamField>
+
+---
+
+## Redis caching variables
+
+Redis caching is optional but recommended for busy networks. When Redis is available, the server caches API responses and automatically invalidates entries when you make configuration changes, reducing latency and API rate-limit consumption.
+
+<ParamField path="env.REDIS_HOST" type="string" default="localhost">
+  Hostname or IP address of your Redis server. When using Docker Compose, set this to the service name (e.g., `redis`).
+</ParamField>
+
+<ParamField path="env.REDIS_PORT" type="number" default="6379">
+  Port Redis is listening on.
+</ParamField>
+
+<ParamField path="env.REDIS_DB" type="number" default="0">
+  Redis database index to use. Values range from 0 to 15 on a default Redis installation.
+</ParamField>
+
+<ParamField path="env.REDIS_PASSWORD" type="string">
+  Password for Redis authentication. Leave unset if your Redis instance does not require a password.
+</ParamField>
+
+---
+
+## Webhook variable
+
+<ParamField path="env.WEBHOOK_SECRET" type="string">
+  A secret string used to verify the HMAC signature on incoming webhook events from your UniFi controller. If you are not using the webhook feature, leave this unset.
+</ParamField>
+
+---
+
+## Performance tracking variables
+
+The server optionally integrates with [agnost.ai](https://app.agnost.ai) to record MCP tool usage and performance metrics. All of these are disabled by default and no data is sent unless you explicitly enable the integration.
+
+<ParamField path="env.AGNOST_ENABLED" type="boolean" default="false">
+  Set to `true` to enable performance tracking. Requires `AGNOST_ORG_ID` to be set.
+</ParamField>
+
+<ParamField path="env.AGNOST_ORG_ID" type="string">
+  Your agnost.ai organization ID. Obtain this from your account at [app.agnost.ai](https://app.agnost.ai).
+</ParamField>
+
+<ParamField path="env.AGNOST_ENDPOINT" type="string" default="https://api.agnost.ai">
+  The agnost.ai API endpoint. You should not need to change this.
+</ParamField>
+
+<ParamField path="env.AGNOST_DISABLE_INPUT" type="boolean" default="false">
+  Set to `true` to prevent tool input parameters from being sent to agnost.ai.
+</ParamField>
+
+<ParamField path="env.AGNOST_DISABLE_OUTPUT" type="boolean" default="false">
+  Set to `true` to prevent tool output from being sent to agnost.ai.
+</ParamField>
+
+---
+
+## API mode comparison
+
+| Feature | `local` | `cloud-v1` | `cloud-ea` |
+|---|---|---|---|
+| Device management | Yes | No | No |
+| Client management | Yes | No | No |
+| Network configuration | Yes | No | No |
+| Firewall rules | Yes | No | No |
+| WiFi/SSID management | Yes | No | No |
+| Site statistics | Yes | Yes | Yes |
+| Rate limit | Unlimited | 10,000 req/min | 100 req/min |
+| Requires local network | Yes | No | No |
+
+<Tip>
+  Use `local` mode whenever possible. Cloud API modes exist for high-level monitoring dashboards where local network access is not available, but they cannot query individual devices or make configuration changes.
+</Tip>
+
+---
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Install with pip or uv" icon="python" href="/installation/pip">
+    Install the server as a Python package and start it from the command line.
+  </Card>
+  <Card title="Run with Docker" icon="docker" href="/installation/docker">
+    Use Docker or Docker Compose for a containerized deployment.
+  </Card>
+</CardGroup>

@@ -1,0 +1,343 @@
+---
+title: "Traffic prioritization and QoS management"
+description: "Create traffic routing policies with bandwidth shaping and DSCP marking, and use DPI analytics to identify top bandwidth applications on your network."
+---
+
+The UniFi MCP Server exposes traffic management capabilities that let your AI assistant analyze and shape network traffic. You can create routing policies to prioritize or limit specific traffic types, inspect bandwidth usage across applications and categories using Deep Packet Inspection (DPI) statistics, and manage traffic flows in real time.
+
+<Note>
+QoS profile management (create/update/delete dedicated QoS profiles) is not available via the UniFi API. The traffic routing tools described here use the supported `/rest/routing` endpoint. For bandwidth management, use traffic routes with the `shape` action.
+</Note>
+
+## What you can do
+
+<CardGroup cols={2}>
+  <Card title="Traffic routes" icon="route">
+    Create routing policies to allow, deny, mark, or shape specific traffic flows.
+  </Card>
+  <Card title="Bandwidth shaping" icon="gauge">
+    Apply bandwidth limits to specific traffic using the shape action.
+  </Card>
+  <Card title="DSCP marking" icon="tag">
+    Mark packets with DSCP values for downstream QoS enforcement.
+  </Card>
+  <Card title="DPI analytics" icon="chart-bar">
+    Identify top bandwidth applications and per-client usage across your network.
+  </Card>
+</CardGroup>
+
+## Traffic routes
+
+Traffic routes are policies that match specific traffic flows and apply an action: `allow`, `deny`, `mark` (DSCP), or `shape` (bandwidth limit). Routes are evaluated in priority order—lower priority numbers run first.
+
+**Example prompts:**
+
+- "Show all traffic routing policies"
+- "Create a rule to prioritize video conferencing traffic"
+- "Limit streaming traffic to 50 Mbps"
+
+### List traffic routes
+
+```python
+result = await mcp.call_tool("list_traffic_routes", {
+    "site_id": "default"
+})
+```
+
+**Response:**
+```json
+[
+  {
+    "id": "route-001",
+    "name": "Prioritize VoIP",
+    "action": "mark",
+    "dscp_marking": 46,
+    "priority": 10,
+    "enabled": true,
+    "match_criteria": {
+      "destination_port": 5060,
+      "protocol": "udp"
+    }
+  }
+]
+```
+
+### Create a traffic route
+
+All route creation requires `confirm=True`. Use `dry_run=True` to validate first.
+
+<Warning>
+Traffic routes that deny traffic or apply strict bandwidth limits can impact network performance. Always preview with `dry_run=True` before applying.
+</Warning>
+
+**Example: prioritize video conferencing with DSCP marking**
+
+```python
+# Preview first
+preview = await mcp.call_tool("create_traffic_route", {
+    "site_id": "default",
+    "name": "Prioritize Video Conferencing",
+    "action": "mark",
+    "dscp_marking": 46,
+    "destination_port": 443,
+    "protocol": "tcp",
+    "priority": 10,
+    "dry_run": True
+})
+
+# Apply
+result = await mcp.call_tool("create_traffic_route", {
+    "site_id": "default",
+    "name": "Prioritize Video Conferencing",
+    "action": "mark",
+    "dscp_marking": 46,
+    "destination_port": 443,
+    "protocol": "tcp",
+    "priority": 10,
+    "confirm": True
+})
+```
+
+**Example: limit streaming traffic**
+
+```python
+result = await mcp.call_tool("create_traffic_route", {
+    "site_id": "default",
+    "name": "Limit Streaming",
+    "action": "shape",
+    "bandwidth_limit_kbps": 51200,
+    "vlan_id": 100,
+    "priority": 50,
+    "confirm": True
+})
+```
+
+### Traffic route parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `name` | string | Descriptive policy name |
+| `action` | string | `allow`, `deny`, `mark`, or `shape` |
+| `source_ip` | string | Source IP or CIDR (optional) |
+| `destination_ip` | string | Destination IP or CIDR (optional) |
+| `source_port` | integer | Source port 1–65535 (optional) |
+| `destination_port` | integer | Destination port 1–65535 (optional) |
+| `protocol` | string | `tcp`, `udp`, `icmp`, or `all` |
+| `vlan_id` | integer | VLAN ID 1–4094 (optional) |
+| `dscp_marking` | integer | DSCP value 0–63 (for `mark` action) |
+| `bandwidth_limit_kbps` | integer | Bandwidth limit in kbps (for `shape` action) |
+| `priority` | integer | Route priority 1–1000 (lower = higher priority) |
+| `enabled` | boolean | Enable route immediately |
+| `confirm` | boolean | Required: must be `true` to execute |
+| `dry_run` | boolean | Preview without applying |
+
+### DSCP values reference
+
+| DSCP value | Traffic class | Typical use |
+|------------|--------------|-------------|
+| `46` | Expedited Forwarding (EF) | VoIP, real-time audio |
+| `34` | Assured Forwarding (AF41) | Video conferencing |
+| `26` | Assured Forwarding (AF31) | Streaming video |
+| `0` | Best Effort | Default traffic |
+
+### Update a traffic route
+
+```python
+result = await mcp.call_tool("update_traffic_route", {
+    "site_id": "default",
+    "route_id": "route-001",
+    "enabled": False,
+    "confirm": True
+})
+```
+
+### Delete a traffic route
+
+```python
+result = await mcp.call_tool("delete_traffic_route", {
+    "site_id": "default",
+    "route_id": "route-001",
+    "confirm": True
+})
+```
+
+## DPI statistics
+
+Deep Packet Inspection (DPI) statistics show you which applications and categories are consuming the most bandwidth on your network. This is a read-only capability—no confirmation is required.
+
+**Example prompts:**
+
+- "What are the top 10 applications by bandwidth in the last 24 hours?"
+- "Show bandwidth usage by category"
+- "How much bandwidth is Netflix using today?"
+- "What is device aa:bb:cc:dd:ee:01 using the network for?"
+
+### Site-wide DPI statistics
+
+```python
+result = await mcp.call_tool("get_dpi_statistics", {
+    "site_id": "default",
+    "time_range": "24h"
+})
+```
+
+**Response:**
+```json
+{
+  "site_id": "default",
+  "time_range": "24h",
+  "applications": [
+    {
+      "application": "Netflix",
+      "category": "Streaming",
+      "tx_bytes": 5120000000,
+      "rx_bytes": 10240000000,
+      "total_bytes": 15360000000
+    },
+    {
+      "application": "YouTube",
+      "category": "Streaming",
+      "tx_bytes": 2560000000,
+      "rx_bytes": 7680000000,
+      "total_bytes": 10240000000
+    }
+  ],
+  "categories": [
+    {
+      "category": "Streaming",
+      "total_bytes": 25600000000,
+      "application_count": 2
+    }
+  ],
+  "total_applications": 15,
+  "total_categories": 6
+}
+```
+
+**Supported time ranges:** `1h`, `6h`, `12h`, `24h`, `7d`, `30d`
+
+### Top applications by bandwidth
+
+Use `list_top_applications` to quickly identify the highest-bandwidth applications.
+
+**Example prompt:** "Show me the top 5 bandwidth hogs this week"
+
+```python
+result = await mcp.call_tool("list_top_applications", {
+    "site_id": "default",
+    "limit": 5,
+    "time_range": "7d"
+})
+```
+
+**Response:**
+```json
+[
+  {
+    "application": "Netflix",
+    "category": "Streaming",
+    "tx_bytes": 35840000000,
+    "rx_bytes": 71680000000,
+    "total_bytes": 107520000000
+  },
+  {
+    "application": "YouTube",
+    "category": "Streaming",
+    "tx_bytes": 17920000000,
+    "rx_bytes": 53760000000,
+    "total_bytes": 71680000000
+  }
+]
+```
+
+### Per-client DPI statistics
+
+See what a specific client is doing on the network by their MAC address.
+
+**Example prompt:** "What applications is the laptop at aa:bb:cc:dd:ee:01 using?"
+
+```python
+result = await mcp.call_tool("get_client_dpi", {
+    "site_id": "default",
+    "client_mac": "aa:bb:cc:dd:ee:01",
+    "time_range": "24h"
+})
+```
+
+**Response:**
+```json
+{
+  "site_id": "default",
+  "client_mac": "aa:bb:cc:dd:ee:01",
+  "time_range": "24h",
+  "total_tx_bytes": 512000000,
+  "total_rx_bytes": 1024000000,
+  "total_bytes": 1536000000,
+  "applications": [
+    {
+      "application": "Netflix",
+      "category": "Streaming",
+      "total_bytes": 1024000000,
+      "percentage": 66.67
+    },
+    {
+      "application": "Zoom",
+      "category": "Video Conferencing",
+      "total_bytes": 256000000,
+      "percentage": 16.67
+    }
+  ],
+  "total_applications": 8
+}
+```
+
+## Example: identifying and shaping heavy bandwidth users
+
+This workflow shows how to use DPI data to identify heavy users and then apply a traffic shaping policy.
+
+<Steps>
+  <Step title="Find top applications">
+    ```python
+    top_apps = await mcp.call_tool("list_top_applications", {
+        "site_id": "default",
+        "limit": 10,
+        "time_range": "24h"
+    })
+    # Streaming is 80% of traffic
+    ```
+  </Step>
+  <Step title="Check per-client usage">
+    ```python
+    client_dpi = await mcp.call_tool("get_client_dpi", {
+        "site_id": "default",
+        "client_mac": "aa:bb:cc:dd:ee:01",
+        "time_range": "24h"
+    })
+    ```
+  </Step>
+  <Step title="Apply bandwidth limit on guest VLAN">
+    ```python
+    result = await mcp.call_tool("create_traffic_route", {
+        "site_id": "default",
+        "name": "Guest Streaming Limit",
+        "action": "shape",
+        "bandwidth_limit_kbps": 25600,
+        "vlan_id": 100,
+        "priority": 100,
+        "confirm": True
+    })
+    ```
+  </Step>
+</Steps>
+
+## Safety summary
+
+| Operation | Requires `confirm=True` | Read-only |
+|-----------|------------------------|-----------|
+| List routes | No | Yes |
+| Get DPI statistics | No | Yes |
+| List top applications | No | Yes |
+| Get client DPI | No | Yes |
+| Create route | Yes | No |
+| Update route | Yes | No |
+| Delete route | Yes | No |
