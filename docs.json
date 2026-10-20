@@ -121,5 +121,6 @@
         ]
       }
     ]
-  }
+  },
+  "description": "UniFi MCP Server documentation: connect AI agents to Ubiquiti UniFi through the Model Context Protocol to monitor, configure, and automate networks and Protect."
 }
